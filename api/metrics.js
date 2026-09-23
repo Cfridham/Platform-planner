@@ -90,7 +90,6 @@ module.exports = async (req, res) => {
       if (startT != null) { analyzedCount++; if (blk > 0) { blockedCount++; blockedDurs.push(blk / DAY); } }
       if (curCat === 'done' && doneT) {
         doneTimes.push(doneT);
-        doneList.push({ k: is.key, s: (f.summary || '').slice(0, 80), a: (f.assignee && f.assignee.displayName) || '', p: (SP && typeof f[SP] === 'number') ? f[SP] : null, t: doneT, cy: cy != null ? Math.round(cy * 10) / 10 : null });
         const pts = (SP && typeof f[SP] === 'number' && !isNaN(f[SP])) ? f[SP] : 0;
         teamDonePts.push({ t: doneT, p: pts });
         if (f.issuetype && (f.issuetype.name || '').toLowerCase() === SHIP_TYPE) shippedTimes.push(doneT);
@@ -99,6 +98,7 @@ module.exports = async (req, res) => {
         else { doneStories.push({ key: is.key, pts: pts, doneT: doneT, assignee: pid }); }
         const cy = (startT && doneT > startT) ? (doneT - startT) / DAY : null;
         if (cy != null) cycles.push(cy);
+        doneList.push({ k: is.key, s: (f.summary || '').slice(0, 80), a: (f.assignee && f.assignee.displayName) || '', p: (SP && typeof f[SP] === 'number') ? f[SP] : null, t: doneT, cy: cy != null ? Math.round(cy * 10) / 10 : null });
         if (cy != null) cycleDated.push({ t: doneT, v: cy });
         if (pid) { (dvDone[pid] = dvDone[pid] || []).push(doneT); if (cy != null) (dvCyc[pid] = dvCyc[pid] || []).push(cy); }
         if (startT && doneT > startT) {
