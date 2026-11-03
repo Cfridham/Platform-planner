@@ -258,12 +258,6 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t);height:1
 .ov-sep{color:var(--bdr2);}
 .ov-cap2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px 32px;align-items:center;}
 @media(max-width:960px){.ov-cap2{grid-template-columns:minmax(0,1fr);}}
-.mx-tbl{width:100%;border-collapse:collapse;}
-.mx-tbl th{font-size:10px;font-weight:600;color:var(--t3);text-align:center;padding:6px 2px;border-bottom:1px solid var(--bdr);white-space:nowrap;}
-.mx-tbl th.l{text-align:left;padding-left:8px;}
-.mx-tbl td{padding:1px;}
-.mx-tbl td.mx-n{padding:4px 8px;white-space:nowrap;font-size:12px;cursor:pointer;}
-.mx-tbl tbody tr:hover td.mx-n{color:var(--acc);}
 .mx-tile{flex:1;min-width:150px;background:var(--sur);border:1px solid var(--bdr);border-radius:var(--r2);padding:12px 14px;}
 .mx-tile.mx-click{cursor:pointer;}
 .mx-tile.mx-click:hover{border-color:var(--acc);}
@@ -545,6 +539,7 @@ const SK='rp_v25';
 // one-time: clear snapshots built from prior test assignments
 (function(){try{if(localStorage.getItem('plt_reset_v25')!=='1'){localStorage.removeItem('plt_trend');localStorage.removeItem('plt_throughput');localStorage.setItem('plt_reset_v25','1');}}catch(e){}})();
 const WS_ORDER=['CallCenter','Resi','B2B','Marketing Suite','Agentic','QM','Stadium','Infra','Unassigned'];
+function wsAll(){var ex=[];projects.forEach(function(p){var w=p.workstream;if(w&&WS_ORDER.indexOf(w)<0&&ex.indexOf(w)<0)ex.push(w);});var o=WS_ORDER.slice(),i=o.indexOf('Unassigned');if(!ex.length)return o;o.splice.apply(o,[i<0?o.length:i,0].concat(ex));return o;}
 const WS_COLORS={'CallCenter':'#2563EB','Resi':'#059669','B2B':'#7C3AED','Marketing Suite':'#DB2777','Agentic':'#D97706','QM':'#0891B2','Stadium':'#DC2626','Infra':'#64748B','Unassigned':'#94A3B8'};
 const COLORS=[{bg:'#EFF6FF',t:'#1D4ED8'},{bg:'#F0FDF4',t:'#15803D'},{bg:'#FFF7ED',t:'#C2410C'},{bg:'#FDF4FF',t:'#7E22CE'},{bg:'#FFF1F2',t:'#BE123C'},{bg:'#F0F9FF',t:'#0369A1'},{bg:'#FAFAF9',t:'#44403C'},{bg:'#F7FEE7',t:'#3F6212'},{bg:'#FFF8F1',t:'#92400E'},{bg:'#F5F3FF',t:'#5B21B6'},{bg:'#ECFDF5',t:'#065F46'},{bg:'#FEF2F2',t:'#991B1B'},{bg:'#EFF6FF',t:'#1E3A8A'},{bg:'#F0FDF4',t:'#166534'},{bg:'#FFFBEB',t:'#92400E'},{bg:'#FDF2F8',t:'#9D174D'},{bg:'#F0F9FF',t:'#075985'},{bg:'#F0FDF4',t:'#14532D'},{bg:'#FFF7ED',t:'#7C2D12'},{bg:'#EDE9FE',t:'#4C1D95'},{bg:'#F5F5F4',t:'#292524'}];
 let devs,projects,assignments={},pltEpics=[],collapseState={},initiatives=[];
@@ -643,7 +638,7 @@ function portfolioCard(p,showWs){
   const overflow=mems.length>5?'<span class="pc-av pc-av-more" style="margin-left:-6px">+'+(mems.length-5)+'</span>':'';
   const totalPct=mems.reduce((s,a)=>s+a.pct,0);
   const st=(!showWs&&!done)?(p.status==='blocked'?'<span style="font-size:10px;font-weight:500;color:var(--red)">Blocked</span>':p.status==='at-risk'?'<span style="font-size:10px;font-weight:500;color:var(--amb)">At risk</span>':''):'';
-  const meta=(showWs?'<span style="font-size:10px;color:'+col+'">'+(p.workstream||'Unassigned')+'</span>':'')+st+(p.jiraKey?'<span style="font-size:9px;font-family:var(--mono);color:var(--t3)" onclick="event.stopPropagation();window.open(\''+JIRA+'/browse/'+p.jiraKey+'\',\'_blank\')" title="Open in Jira">'+p.jiraKey+'</span>':'')+(dc&&p.deadline?'<span class="pc-date '+dc+'">'+p.deadline.slice(5)+'</span>':'')+(done&&pd?'<span style="font-size:10px;color:var(--t3)" title="'+(pd.approx?'Estimated completion date':'Completed (from Jira)')+'">\u2713 '+(pd.approx?'~':'')+pd.date.slice(5)+'</span>':'');
+  const meta=vendBadge(p)+(showWs?'<span style="font-size:10px;color:'+col+'">'+(p.workstream||'Unassigned')+'</span>':'')+st+(p.jiraKey?'<span style="font-size:9px;font-family:var(--mono);color:var(--t3)" onclick="event.stopPropagation();window.open(\''+JIRA+'/browse/'+p.jiraKey+'\',\'_blank\')" title="Open in Jira">'+p.jiraKey+'</span>':'')+(dc&&p.deadline?'<span class="pc-date '+dc+'">'+p.deadline.slice(5)+'</span>':'')+(done&&pd?'<span style="font-size:10px;color:var(--t3)" title="'+(pd.approx?'Estimated completion date':'Completed (from Jira)')+'">\u2713 '+(pd.approx?'~':'')+pd.date.slice(5)+'</span>':'');
   return '<div class="port-card'+(selPid===p.id?' sel':'')+'" onclick="selProject(\''+p.id+'\')" id="pc-'+p.id+'"'+(ragCol?' style="border-left:3px solid '+ragCol+'"':'')+'>'+
     '<div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:8px"><div style="flex:1;min-width:0;font-size:12px;font-weight:600;line-height:1.3">'+p.name+'</div>'+(p.pinned?'<span style="color:var(--acc);font-size:11px;flex-shrink:0">★</span>':'')+'<span class="port-park" onclick="parkProject(\''+p.id+'\',event)" title="Park — not actively worked on">✕</span></div>'+
     '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px"><span style="display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0">'+meta+'</span>'+
@@ -710,19 +705,21 @@ function renderBoard(){
   const doneAll=activeQ==='all'?list.filter(p=>p.status==='done'):[];if(activeQ==='all')list=list.filter(p=>p.status!=='done');
   let groups;
   if(boardGroup==='workstream'){
-    groups=WS_ORDER.map(ws=>({title:ws,color:wsCol(ws),items:list.filter(p=>(p.workstream||'Unassigned')===ws)}));
+    groups=wsAll().map(ws=>({title:ws,color:wsCol(ws),items:list.filter(p=>(p.workstream||'Unassigned')===ws)}));
   }else{ // status (default)
     groups=[['blocked','Blocked','var(--red)'],['at-risk','At risk','var(--amb)'],['in-progress','In progress','var(--blu)'],['planned','Planned','var(--t3)'],['done','Done','var(--grn)']].map(([k,t,c])=>({title:t,color:c,items:list.filter(p=>(p.status||'planned')===k||(k==='in-progress'&&p.status==='on-track'))}));
   }
   const urg=p=>urgScore(p);
-  const html=groups.filter(g=>g.items.length).map(g=>{
+  const doneByWs={};if(boardGroup==='workstream')doneAll.forEach(p=>{const k=p.workstream||'Unassigned';(doneByWs[k]=doneByWs[k]||[]).push(p);});
+  const doneBlock=function(ws){const d=doneByWs[ws];if(!d||!d.length)return '';const open=!!((window._showDoneWs||{})[ws])||!!q;return '<div onclick="toggleDoneWs(\''+ws.replace(/'/g,"\\'")+'\')" style="cursor:pointer;display:flex;align-items:center;gap:6px;margin:8px 0 4px;font-size:11px;color:var(--t3)"><span>Done \u00b7 '+d.length+'</span><span style="font-size:9px">'+(open?'hide \u25b2':'show \u25bc')+'</span></div>'+(open?'<div class="port-grid">'+d.slice().sort((a,b)=>((b.deadline||'')<(a.deadline||'')?-1:1)).map(p=>portfolioCard(p,false)).join('')+'</div>':'');};
+  const html=groups.filter(g=>g.items.length||(doneByWs[g.title]&&doneByWs[g.title].length)).map(g=>{
     const rank={'blocked':0,'at-risk':1,'in-progress':2,'on-track':2,'planned':3};
     const rk=p=>rank[p.status]!=null?rank[p.status]:3;
-    const cards='<div class="port-grid">'+g.items.sort((a,b)=>(rk(a)-rk(b))||(urg(a)-urg(b))).map(p=>portfolioCard(p,boardGroup!=='workstream')).join('')+'</div>';
+    const cards=(g.items.length?'<div class="port-grid">'+g.items.sort((a,b)=>(rk(a)-rk(b))||(urg(a)-urg(b))).map(p=>portfolioCard(p,boardGroup!=='workstream')).join('')+'</div>':'')+doneBlock(g.title);
     return '<div class="port-group"><div class="port-group-hd"><span class="port-group-dot" style="background:'+g.color+'"></span><span class="port-group-title" style="color:'+g.color+'">'+g.title+'</span><span class="port-group-count">'+g.items.length+'</span><div class="port-group-rule"></div></div>'+cards+'</div>';
   }).join('');
   let doneHTML='';
-  if(doneAll.length){
+  if(doneAll.length&&boardGroup!=='workstream'){
     const dopen=window._showDone||!!q;
     doneHTML='<div class="port-group" style="margin-top:8px"><div class="port-group-hd" onclick="toggleDoneSection()" style="cursor:pointer"><span class="port-group-dot" style="background:var(--t3)"></span><span class="port-group-title" style="color:var(--t3)">Done</span><span class="port-group-count">'+doneAll.length+'</span><span style="font-size:9px;color:var(--t3)">'+(dopen?'hide ▲':'show ▼')+'</span><div class="port-group-rule"></div></div>'+(dopen?'<div class="port-grid">'+doneAll.sort((a,b)=>((b.deadline||'')<(a.deadline||'')?-1:1)).map(p=>portfolioCard(p,true)).join('')+'</div>':'')+'</div>';
   }
@@ -815,6 +812,302 @@ function refreshQuarterSelect(){
   sel.innerHTML='<option value="all">All projects</option>'+qs.map(function(q){return '<option value="'+q+'">Completed '+q+' ('+cnt[q]+')</option>';}).join('');
   sel.value=activeQ;
 }
+/* ================= Individual velocity ================= */
+window._velSt=window._velSt||{};
+var VEL_MAXP={week:13,biweek:6,month:3};
+var VEL_MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function velFmt(ms){var d=new Date(ms);return VEL_MO[d.getMonth()]+' '+d.getDate();}
+function velType(n){n=String(n||'').toLowerCase();if(n.indexOf('sub')>=0)return 'Sub';if(n.indexOf('epic')>=0)return 'Epic';if(n.indexOf('bug')>=0||n.indexOf('incident')>=0)return 'Bug';if(n.indexOf('story')>=0)return 'Story';if(n.indexOf('task')>=0)return 'Task';return 'Other';}
+function velInc(t,rule){if(t==='Epic')return false;if(rule==='all')return true;if(rule==='nosub')return t!=='Sub';return t==='Story'||t==='Task'||t==='Bug';}
+function velCfg(){
+  var d={period:'biweek',periods:6,rule:'nosub',labels:true,jql:'',stack:false};
+  try{var c=JSON.parse(localStorage.getItem('plt_vel_cfg')||'{}');if(c.period==='week'||c.period==='biweek'||c.period==='month')d.period=c.period;if(+c.periods>=2)d.periods=Math.round(+c.periods);if(c.rule==='all'||c.rule==='nosub'||c.rule==='core')d.rule=c.rule;if(typeof c.labels==='boolean')d.labels=c.labels;if(typeof c.stack==='boolean')d.stack=c.stack;if(typeof c.jql==='string')d.jql=c.jql;}catch(e){}
+  d.periods=Math.max(2,Math.min(VEL_MAXP[d.period],d.periods));
+  return d;
+}
+function velSave(c){try{localStorage.setItem('plt_vel_cfg',JSON.stringify(c));}catch(e){}}
+function velData(){try{return JSON.parse(localStorage.getItem('plt_vel_data')||'null');}catch(e){return null;}}
+function velSet(k,v){var c=velCfg();c[k]=v;if(k==='period')c.periods=VEL_MAXP[v];velSave(c);Object.keys(window._velSt).forEach(function(x){window._velSt[x].sel=null;});velRender();}
+function velSetDev(ctx,id){var st=window._velSt[ctx]=window._velSt[ctx]||{};st.dev=id;st.sel=null;velRender();}
+function velSel(ctx,i){var st=window._velSt[ctx];st.sel=i;velRender();}
+function velToggleSet(ctx){var st=window._velSt[ctx];st.set=!st.set;velRender();}
+function velSaveSettings(ctx){
+  var c=velCfg();var r=document.getElementById('vel-rule-'+ctx),n=document.getElementById('vel-n-'+ctx),j=document.getElementById('vel-jql-'+ctx);
+  if(r)c.rule=r.value;if(n)c.periods=Math.max(2,Math.min(VEL_MAXP[c.period],Math.round(+n.value||VEL_MAXP[c.period])));var newJql=j?j.value.trim():c.jql;var changed=newJql!==c.jql;c.jql=newJql;velSave(c);
+  window._velSt[ctx].set=false;if(changed){velLoad();}else velRender();
+}
+function velSeries(scope,cfg){
+  var DAY=864e5,t=new Date();t.setHours(0,0,0,0);var end=t.getTime()+DAY,n=cfg.periods,B=[],i;
+  if(cfg.period==='month'){for(i=n-1;i>=0;i--){var s0=new Date(t.getFullYear(),t.getMonth()-i,1),s=s0.getTime(),e=Math.min(new Date(t.getFullYear(),t.getMonth()-i+1,1).getTime(),end);B.push({s:s,e:e,label:VEL_MO[s0.getMonth()]+(s0.getFullYear()!==t.getFullYear()?" '"+String(s0.getFullYear()).slice(2):''),n:0,items:[],byDev:{}});}}
+  else{var len=(cfg.period==='week'?7:14)*DAY;for(i=n-1;i>=0;i--){var e2=end-i*len,s2=e2-len;B.push({s:s2,e:e2,label:velFmt(s2)+'\u2013'+velFmt(e2-DAY),n:0,items:[],byDev:{}});}}
+  var team=scope==='*',ids=team?devs.map(function(d){return d.id;}):[scope];
+  var data=velData(),have=!!(data&&data.items&&ids.some(function(id){return data.items[id];}));
+  var where=function(ms){for(var k=0;k<B.length;k++){if(ms>=B[k].s&&ms<B[k].e)return B[k];}return null;};
+  if(have){ids.forEach(function(id){(data.items[id]||[]).forEach(function(it){if(!velInc(it[2],cfg.rule))return;var b=where(it[1]);if(!b)return;b.n++;if(team)b.byDev[id]=(b.byDev[id]||0)+1;else b.items.push(it);});});}
+  else{var H=mxHistory();Object.keys(H).forEach(function(k){var b=where(Date.parse(k+'T00:00:00'));if(!b)return;var w=H[k]||{};if(team){b.n+=(w.t||0);Object.keys(w.d||{}).forEach(function(id){b.byDev[id]=(b.byDev[id]||0)+w.d[id];});}else{b.n+=((w.d||{})[scope]||0);}});}
+  var tot=B.reduce(function(a,b){return a+b.n;},0);
+  return {B:B,avg:B.length?tot/B.length:0,fallback:!have,at:data&&data.at};
+}
+async function velLoad(){
+  if(!jiraReady()){showToast('Connect Jira in Settings first','warn');return;}
+  var cfg=velCfg(),headers=jiraHeaders();
+  var days=95;
+  var data={at:Date.now(),days:days,jql:cfg.jql,items:{},failed:[]},list=devs.slice(),idx=0,done=0;
+  window._velProgress={done:0,total:list.length};velRender();
+  async function one(d){
+    var q='assignee = "'+d.name.replace(/"/g,'')+'" AND statusCategory = Done AND resolutiondate >= -'+days+'d'+(cfg.jql?' AND ('+cfg.jql+')':'')+' ORDER BY resolutiondate ASC';
+    var out=[],tok=null;
+    for(var i=0;i<8;i++){
+      var u=JIRA+'/rest/api/3/search/jql?jql='+encodeURIComponent(q)+'&fields=issuetype,resolutiondate,summary&maxResults=100'+(tok?'&nextPageToken='+encodeURIComponent(tok):'');
+      var r=await jFetch(u,{headers:headers});if(!r.ok)throw new Error('http '+r.status);
+      var j=await r.json();out=out.concat(j.issues||[]);if(j.isLast||!j.nextPageToken)break;tok=j.nextPageToken;
+    }
+    data.items[d.id]=out.filter(function(x){return x.fields&&x.fields.resolutiondate;}).map(function(x){var ms=Date.parse(String(x.fields.resolutiondate).replace(/([+-]\d\d)(\d\d)$/,'$1:$2'));return [x.key,ms,velType(x.fields.issuetype&&x.fields.issuetype.name),String(x.fields.summary||'').slice(0,70)];}).filter(function(x){return !isNaN(x[1]);});
+  }
+  async function worker(){while(idx<list.length){var d=list[idx++];try{await one(d);}catch(e){data.failed.push(d.name);}window._velProgress.done=++done;velRender();}}
+  await Promise.all([worker(),worker(),worker(),worker()]);
+  window._velProgress=null;
+  try{localStorage.setItem('plt_vel_data',JSON.stringify(data));}catch(e){showToast('Velocity data is too large to save','warn');}
+  velRender();
+  showToast('Velocity data loaded'+(data.failed.length?' \u2014 '+data.failed.length+' engineer(s) failed':''),data.failed.length?'warn':'info');
+}
+function velInit(ctx,devId){
+  var st=window._velSt[ctx]=window._velSt[ctx]||{dev:null,sel:null,set:false};
+  if(devId)st.dev=devId;
+  var ok=st.dev&&((ctx==='m'&&st.dev==='*')||devs.some(function(d){return d.id===st.dev;}));
+  if(!ok)st.dev=ctx==='m'?'*':(devs[0]&&devs[0].id);
+  st.sel=null;velRender();
+}
+function velRender(){['m','e'].forEach(function(ctx){var el=document.getElementById('vel-'+ctx);if(el&&window._velSt[ctx])el.innerHTML=velHTML(ctx);});}
+function velHTML(ctx){
+  var cfg=velCfg(),st=window._velSt[ctx]||{},team=st.dev==='*'&&ctx==='m';
+  var dev=team?null:(devs.find(function(d){return d.id===st.dev;})||devs[0]);if(!team&&!dev)return '';
+  var who=team?'Whole team':dev.name,scope=team?'*':dev.id;
+  var S=velSeries(scope,cfg),B=S.B,sel=(st.sel==null||st.sel>=B.length)?B.length-1:st.sel;
+  var seg=function(k,l){return '<button class="fb'+(cfg.period===k?' on':'')+'" onclick="velSet(\'period\',\''+k+'\')">'+l+'</button>';};
+  var picker=ctx==='m'?'<select onchange="velSetDev(\'m\',this.value)" style="font-size:12px;padding:3px 6px;max-width:190px"><option value="*"'+(team?' selected':'')+'>Whole team</option>'+devs.slice().sort(function(a,b){return a.name.localeCompare(b.name);}).map(function(d){return '<option value="'+d.id+'"'+(!team&&d.id===dev.id?' selected':'')+'>'+d.name+'</option>';}).join('')+'</select>':'<span style="font-size:12px;font-weight:600">'+dev.name+'</span>';
+  var prog=window._velProgress?'<span style="font-size:11px;color:var(--t3)">Loading from Jira\u2026 '+window._velProgress.done+'/'+window._velProgress.total+'</span>':'<button class="fb" onclick="velLoad()">'+(S.at?'\u21bb Refresh':'Load from Jira')+'</button>';
+  var stackBtn=team?'<button class="fb'+(cfg.stack?' on':'')+'" onclick="velSet(\'stack\','+(!cfg.stack)+')" title="Stack each bar by engineer">By engineer</button>':'';
+  var head='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px"><div class="chart-title" style="margin:0;flex:1;min-width:150px">Velocity \u00b7 issues completed</div>'+picker+'<span style="display:inline-flex;gap:4px">'+seg('week','Weekly')+seg('biweek','Bi-weekly')+seg('month','Monthly')+'</span>'+stackBtn+prog+'<button class="fb'+(st.set?' on':'')+'" onclick="velToggleSet(\''+ctx+'\')">\u2699</button></div>';
+  var settings=st.set?'<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;padding:10px 12px;background:var(--s2);border-radius:var(--r);margin-bottom:12px;font-size:12px"><label style="display:flex;flex-direction:column;gap:3px">Count<select id="vel-rule-'+ctx+'"><option value="all"'+(cfg.rule==='all'?' selected':'')+'>All issues</option><option value="nosub"'+(cfg.rule==='nosub'?' selected':'')+'>Excluding sub-tasks</option><option value="core"'+(cfg.rule==='core'?' selected':'')+'>Stories, tasks &amp; bugs only</option></select></label><label style="display:flex;flex-direction:column;gap:3px">Periods (max '+VEL_MAXP[cfg.period]+' = 3 months)<input id="vel-n-'+ctx+'" type="number" min="2" max="'+VEL_MAXP[cfg.period]+'" value="'+cfg.periods+'" style="width:64px"></label><label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" '+(cfg.labels?'checked':'')+' onchange="velSet(\'labels\',this.checked)"> Value labels</label><label style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:220px">Jira filter (optional JQL, to match your Jira report)<input id="vel-jql-'+ctx+'" value="'+String(cfg.jql).replace(/"/g,'&quot;')+'" placeholder="e.g. project = PLT AND issuetype != Sub-task" style="width:100%"></label><button class="btn btn-p" onclick="velSaveSettings(\''+ctx+'\')">Save</button></div>':'';
+  var max=B.reduce(function(a,b){return Math.max(a,b.n);},0),step=max<=6?1:max<=12?2:max<=30?5:10,top=Math.max(4,Math.ceil(max/step)*step),P=190;
+  // stacking by engineer (team view only)
+  var top8=[],colorOf={};
+  if(team&&cfg.stack){var tot={};B.forEach(function(b){Object.keys(b.byDev).forEach(function(id){tot[id]=(tot[id]||0)+b.byDev[id];});});top8=Object.keys(tot).sort(function(a,b){return tot[b]-tot[a];}).slice(0,8);top8.forEach(function(id){var d=devs.find(function(x){return x.id===id;});colorOf[id]=d?gc(d.colorIdx).t:'var(--t3)';});}
+  var nameOf=function(id){var d=devs.find(function(x){return x.id===id;});return d?d.name:id;};
+  var grid='';for(var v=0;v<=top;v+=step){grid+='<div style="position:absolute;left:0;right:0;bottom:'+Math.round(v/top*P)+'px;border-top:1px dashed var(--bdr);"><span style="position:absolute;left:-26px;top:-7px;font-size:9px;color:var(--t3);width:20px;text-align:right">'+v+'</span></div>';}
+  var cols=B.map(function(b,i){
+    var on=i===sel,bar;
+    if(team&&cfg.stack){var used=0,segs=top8.map(function(id){var c=b.byDev[id]||0;used+=c;return c>0?'<div title="'+nameOf(id)+': '+c+'" style="height:'+Math.max(1,Math.round(c/top*P))+'px;background:'+colorOf[id]+'"></div>':'';}).join('');var rest=Math.max(0,b.n-used);if(rest>0)segs='<div title="Others: '+rest+'" style="height:'+Math.max(1,Math.round(rest/top*P))+'px;background:var(--bdr2)"></div>'+segs;bar='<div style="width:72%;max-width:150px;display:flex;flex-direction:column;justify-content:flex-end;border-radius:3px 3px 0 0;overflow:hidden">'+segs+'</div>';}
+    else bar='<div style="width:72%;max-width:150px;height:'+Math.max(b.n?2:0,Math.round(b.n/top*P))+'px;background:var(--grn);border-radius:3px 3px 0 0"></div>';
+    return '<div onclick="velSel(\''+ctx+'\','+i+')" title="'+b.label+': '+b.n+'" style="flex:1;min-width:0;height:'+(P+16)+'px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;cursor:pointer;position:relative;background:'+(on?'rgba(37,99,235,.10)':'transparent')+'">'+(cfg.labels?'<div style="font-size:10px;color:var(--t2);margin-bottom:2px">'+b.n+'</div>':'')+bar+'</div>';
+  }).join('');
+  var avgLine='<div style="position:absolute;left:0;right:0;bottom:'+Math.round(S.avg/top*P)+'px;border-top:2px dashed var(--grn);pointer-events:none"><span style="position:absolute;right:2px;top:-16px;background:var(--grn);color:#fff;font-size:9px;padding:1px 5px;border-radius:3px">'+(Math.round(S.avg*10)/10)+'</span></div>';
+  var xl='<div style="display:flex;margin-top:4px">'+B.map(function(b,i){return '<div style="flex:1;min-width:0;text-align:center;font-size:10px;color:'+(i===sel?'var(--t)':'var(--t3)')+';font-weight:'+(i===sel?'600':'400')+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+b.label+'</div>';}).join('')+'</div>';
+  var legend=(team&&cfg.stack)?'<div style="display:flex;flex-wrap:wrap;gap:4px 12px;margin:10px 0 0 30px;font-size:10px;color:var(--t2)">'+top8.map(function(id){return '<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:'+colorOf[id]+'"></span>'+nameOf(id).split(' ')[0]+'</span>';}).join('')+'<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:var(--bdr2)"></span>Others</span></div>':'';
+  var chart='<div style="padding-left:30px"><div style="position:relative;height:'+(P+16)+'px;border-left:1px solid var(--bdr);border-bottom:1px solid var(--bdr)">'+grid+'<div style="position:absolute;inset:0;display:flex">'+cols+'</div>'+avgLine+'</div>'+xl+'</div>'+legend;
+  var cur=B[sel],prev=sel>0?B[sel-1]:null,tr='\u2014';if(prev&&prev.n>0){var pc=Math.round((cur.n-prev.n)/prev.n*100);tr='<span style="color:'+(pc>0?'var(--grn)':pc<0?'var(--red)':'var(--t2)')+'">'+(pc>0?'\u2191 ':pc<0?'\u2193 ':'\u2192 ')+Math.abs(pc)+'%</span>';}
+  var metric=function(l,v){return '<div style="flex:1"><div style="font-size:10px;color:var(--t3)">'+l+'</div><div style="font-size:15px;font-weight:600;font-family:var(--mono)">'+v+'</div></div>';};
+  var list;
+  if(team){
+    var ids=Object.keys(cur.byDev).filter(function(id){return cur.byDev[id]>0;}).sort(function(a,b){return cur.byDev[b]-cur.byDev[a];}),sum=ids.reduce(function(a,id){return a+cur.byDev[id];},0),mx=Math.max(1,cur.byDev[ids[0]]||1),other=Math.max(0,cur.n-sum);
+    var row=function(name,n,color,click){return '<div'+(click?' onclick="'+click+'"':'')+' style="display:flex;align-items:center;gap:10px;padding:6px 10px;border-bottom:1px solid var(--bdr);'+(click?'cursor:pointer':'')+'"><span style="width:150px;font-size:12px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+name+'</span><div style="flex:1;height:8px;background:var(--s2);border-radius:99px;overflow:hidden"><div style="height:100%;width:'+Math.round(n/mx*100)+'%;background:'+color+'"></div></div><span style="font-family:var(--mono);font-size:12px;width:30px;text-align:right">'+n+'</span></div>';};
+    list=ids.map(function(id){return row(nameOf(id),cur.byDev[id],cfg.stack&&colorOf[id]?colorOf[id]:'var(--grn)','velSetDev(\'m\',\''+id+'\')');}).join('')+(other>0?row('Other / unmatched',other,'var(--t3)',''):'')+(ids.length?'<div style="font-size:10px;color:var(--t3);padding:6px 10px">Click an engineer to see their own chart.</div>':'<div style="font-size:11px;color:var(--t3);padding:8px 10px">Nothing completed in this period.</div>');
+  }else{
+    list=cur.items.length?cur.items.slice().sort(function(a,b){return b[1]-a[1];}).map(function(it){return '<a href="'+JIRA+'/browse/'+it[0]+'" target="_blank" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid var(--bdr);text-decoration:none"><span style="font-family:var(--mono);font-size:10px;color:var(--acc);flex-shrink:0">'+it[0]+'</span><span style="font-size:8px;font-weight:600;padding:1px 5px;border-radius:99px;background:var(--s2);color:'+tkTypeCol(it[2])+';flex-shrink:0">'+it[2]+'</span><span style="font-size:12px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--t)">'+it[3]+'</span><span style="font-size:10px;color:var(--t3);flex-shrink:0">'+velFmt(it[1])+'</span></a>';}).join(''):(S.fallback?'':'<div style="font-size:11px;color:var(--t3);padding:8px">Nothing completed in this period.</div>');
+  }
+  var back=(team||ctx!=='m')?'':'<button class="fb" onclick="velSetDev(\'m\',\'*\')" style="margin-left:8px">\u2190 Whole team</button>';
+  var breakdown='<div style="margin-top:12px;border:1px solid var(--bdr);border-radius:var(--r2);overflow:hidden"><div style="background:var(--s2);padding:7px 10px;font-size:12px;display:flex;align-items:center"><span><b>Breakdown:</b> '+who+' \u00b7 '+cur.label+'</span>'+back+'</div><div style="display:flex;gap:10px;padding:8px 10px;border-bottom:1px solid var(--bdr)">'+metric('Total',cur.n)+metric('Trend',tr)+metric('Average',Math.round(S.avg*10)/10)+'</div>'+list+'</div>';
+  var note=S.fallback?'<div style="font-size:10px;color:var(--t3);margin-top:8px;line-height:1.5">Showing counts from Jira\'s team metrics (all issue types, rolling weekly buckets). Click <b>Load from Jira</b> for exact counts'+(team?' per engineer':'')+' and ticket lists.</div>':'<div style="font-size:10px;color:var(--t3);margin-top:8px">Data loaded '+new Date(S.at).toLocaleString()+' \u00b7 counting '+({all:'all issues',nosub:'issues excluding sub-tasks',core:'stories, tasks and bugs'}[cfg.rule])+(cfg.jql?' \u00b7 filtered by your JQL':'')+(team?' \u00b7 engineers listed in this app':'')+'. Periods are rolling, ending today.</div>';
+  return head+settings+chart+breakdown+note;
+}
+/* ================= Offshore team ================= */
+window._teamFilter=window._teamFilter||'all';
+function tvDevs(){var f=window._teamFilter;return devs.filter(function(d){return f==='off'?!!d.offshore:f==='on'?!d.offshore:vendorById(f)?d.vendor===f:true;});}
+function setTeamFilter(f){window._teamFilter=f;if(f==='off'||vendorById(f))vendAutoLoad();try{renderTeamView();}catch(e){}}
+function vendAgoT(ms){var m=Math.floor((Date.now()-ms)/6e4);if(m<1)return 'just now';if(m<60)return m+'m ago';var h=Math.floor(m/60);if(h<24)return h+'h ago';return Math.floor(h/24)+'d ago';}
+function teamFilterChips(){
+  var f=window._teamFilter,nOff=devs.filter(function(d){return d.offshore;}).length;
+  var chip=function(k,l,n){return '<button class="fb'+(f===k?' on':'')+'" onclick="setTeamFilter(\''+k+'\')" style="margin-right:6px">'+l+' <span style="opacity:.6">'+n+'</span></button>';};
+  var tools='';
+  if(vendFilterIds().length){var d=vendData();tools='<span style="margin-left:auto;display:inline-flex;align-items:center;gap:8px;font-size:11px;color:var(--t3)">'+(window._vendLoading?'Loading from Jira\u2026':(d?'Updated '+vendAgoT(d.at):'Not loaded'))+'<button class="fb" onclick="vendorRefresh()" title="Refresh from Jira">\u21bb</button><button class="fb" onclick="vendCopy()">Copy summary</button></span>';}
+  return '<div style="margin-bottom:18px;display:flex;align-items:center;flex-wrap:wrap;gap:4px">'+chip('all','All',devs.length)+chip('on','Onshore',devs.length-nOff)+(nOff?chip('off','Offshore',nOff):'')+VENDORS.map(function(v){return chip(v.id,v.name,devs.filter(function(d){return d.vendor===v.id;}).length);}).join('')+tools+'</div>';
+}
+function toggleOffshore(devId,on){var d=devs.find(function(x){return x.id===devId;});if(!d)return;d.offshore=!!on;save();}
+function offDone14(devId){var data=velData();if(data&&data.items&&data.items[devId]){var cfg=velCfg(),lim=Date.now()-14*864e5;return data.items[devId].filter(function(it){return it[1]>=lim&&velInc(it[2],cfg.rule);}).length;}var H=mxHistory(),keys=Object.keys(H).sort().slice(-2);return keys.reduce(function(a,k){return a+(((H[k]||{}).d||{})[devId]||0);},0);}
+/* ================= Offshore vendors (Akvelon, Calsoft) ================= */
+var VENDORS=[{id:'akvelon',name:'Akvelon',alias:['akvelon','aklevon']},{id:'calsoft',name:'Calsoft',alias:['calsoft']}];
+var VENDOR_ROSTER=[
+  {v:'akvelon',people:[{f:'Yehor',l:'Illarionov',name:'Yehor Illarionov',email:'yillarionov@centerfield.com'},{f:'Ivan',l:'Domaranskiy',name:'Ivan Domaranskiy',email:'idomaranskiy@centerfield.com'},{f:'Oleh',l:'Yarmolenko',name:'Oleh Yarmolenko',email:'oyarmolenko@centerfield.com'}]},
+  {v:'calsoft',people:[{f:'Suraj',l:'Gade',name:'Suraj Gade',email:'sugade@centerfield.com'},{f:'Sasank',l:'Kumar',name:'Sasank Kumar',email:'sasankk@centerfield.com'}]}
+];
+var DEV_REMOVALS=['Vincent Dy','Oleksii Afonin','Oscar Bonifassi','Alec Hulce'];
+function applyDevRemovals(){
+  try{
+    var done=[];try{done=JSON.parse(localStorage.getItem('plt_removals_done')||'[]');}catch(e){}
+    if(localStorage.getItem('plt_removals_v1')==='1'){['Vincent Dy','Oleksii Afonin','Oscar Bonifassi'].forEach(function(n){if(done.indexOf(n)<0)done.push(n);});}
+    var todo=DEV_REMOVALS.filter(function(n){return done.indexOf(n)<0;});
+    if(!todo.length)return;
+    var bk=removedDevs(),changed=false;
+    todo.forEach(function(nm){
+      var d=devs.find(function(x){return String(x.name||'').toLowerCase()===nm.toLowerCase();});if(!d)return;
+      var held={};Object.keys(assignments).forEach(function(pid){var e=(assignments[pid]||[]).filter(function(a){return a.devId===d.id;});if(e.length)held[pid]=e;});
+      bk=bk.filter(function(x){return x.dev.id!==d.id;});bk.push({dev:d,held:held,at:Date.now()});
+      devs=devs.filter(function(x){return x.id!==d.id;});
+      Object.keys(assignments).forEach(function(pid){assignments[pid]=(assignments[pid]||[]).filter(function(a){return a.devId!==d.id;});});
+      if(window.engTickets&&window.engTickets[d.id])delete window.engTickets[d.id];
+      changed=true;
+    });
+    try{localStorage.setItem('plt_removed_devs',JSON.stringify(bk));}catch(e){}
+    if(changed){try{localStorage.setItem('plt_eng_tickets',JSON.stringify(window.engTickets||{}));}catch(e){}save();}
+    localStorage.setItem('plt_removals_done',JSON.stringify(done.concat(todo)));
+  }catch(e){}
+}
+function applyVendorRoster(){
+  try{
+    if(localStorage.getItem('plt_roster_v1')==='1')return;
+    var changed=false;
+    VENDOR_ROSTER.forEach(function(g){g.people.forEach(function(pp){
+      var f=pp.f.toLowerCase(),l=pp.l.toLowerCase();
+      var d=devs.find(function(x){var n=String(x.name||'').toLowerCase().split(' ');return n[0]===f&&n[n.length-1]===l;})||devs.find(function(x){return (x.email||'').toLowerCase()===pp.email;});
+      if(!d){d={id:'d_'+Date.now()+'_'+Math.floor(Math.random()*1e5),name:pp.name,role:'Engineer',skills:[],colorIdx:devs.length%COLORS.length,offshore:true,capacity:100,vendor:g.v,email:pp.email};devs.push(d);changed=true;}
+      else{if(d.vendor!==g.v||!d.offshore){d.vendor=g.v;d.offshore=true;changed=true;}if(!d.email){d.email=pp.email;changed=true;}}
+    });});
+    localStorage.setItem('plt_roster_v1','1');
+    if(changed)save();
+  }catch(e){}
+}
+function applyVendorNames(){try{var o=JSON.parse(localStorage.getItem('plt_vendor_names')||'{}');VENDORS.forEach(function(v){if(o[v.id])v.name=o[v.id];});}catch(e){}}
+function vendRename(id){var v=vendorById(id);if(!v)return;var n=window.prompt('Team name',v.name);if(!n||!n.trim())return;var o={};try{o=JSON.parse(localStorage.getItem('plt_vendor_names')||'{}');}catch(e){}o[id]=n.trim();try{localStorage.setItem('plt_vendor_names',JSON.stringify(o));}catch(e){}v.name=n.trim();vendRerender();}
+applyVendorNames();
+function vendorById(id){for(var i=0;i<VENDORS.length;i++){if(VENDORS[i].id===id)return VENDORS[i];}return null;}
+function vendorOfText(t){t=String(t||'').toLowerCase();for(var i=0;i<VENDORS.length;i++){if(VENDORS[i].alias.some(function(a){return t.indexOf(a)>=0;}))return VENDORS[i].id;}return '';}
+function vendBadge(p){var v=p&&p.vendor&&vendorById(p.vendor);return v?'<span style="font-size:9px;font-weight:600;padding:1px 6px;border-radius:99px;background:var(--s2);color:var(--t2)">'+v.name+'</span>':'';}
+function setDevVendor(devId,val){var d=devs.find(function(x){return x.id===devId;});if(!d)return;if(val===''){d.offshore=false;d.vendor='';}else if(val==='other'){d.offshore=true;d.vendor='';}else{d.offshore=true;d.vendor=val;}save();}
+function vendData(){try{return JSON.parse(localStorage.getItem('plt_vendor_data')||'null');}catch(e){return null;}}
+function vendHidden(){try{return JSON.parse(localStorage.getItem('plt_vendor_hidden')||'[]');}catch(e){return [];}}
+function vendMs(x){return x?Date.parse(String(x).replace(/([+-]\d\d)(\d\d)$/,'$1:$2')):0;}
+async function jiraTeamField(headers){
+  var f=localStorage.getItem('plt_jira_team_field')||'';
+  if(f==='__none__')return '';if(f)return f;
+  try{var r=await jFetch(JIRA+'/rest/api/3/field',{headers:headers});
+    if(r.ok){var flds=await r.json();var m=flds.find(function(x){return /^team$/i.test((x.name||'').trim())&&x.custom;})||flds.find(function(x){return /^team$/i.test((x.name||'').trim());});
+      if(m){localStorage.setItem('plt_jira_team_field',m.id);return m.id;}localStorage.setItem('plt_jira_team_field','__none__');}}catch(e){}
+  return '';
+}
+function teamText(v){if(v==null)return '';if(Array.isArray(v))v=v[0];if(v==null)return '';if(typeof v==='string')return v;return v.title||v.name||v.value||'';}
+async function jiraAll(jql,fields,maxPages,headers){
+  var out=[],tok=null;
+  for(var i=0;i<maxPages;i++){var u=JIRA+'/rest/api/3/search/jql?jql='+encodeURIComponent(jql)+'&fields='+fields+'&maxResults=100'+(tok?'&nextPageToken='+encodeURIComponent(tok):'');var r=await jFetch(u,{headers:headers});if(!r.ok)throw new Error('Jira '+r.status);var d=await r.json();out=out.concat(d.issues||[]);if(d.isLast||!d.nextPageToken)break;tok=d.nextPageToken;}
+  return out;
+}
+async function vendorRefresh(){
+  if(!jiraReady()){showToast('Connect Jira in Settings first','warn');return;}
+  window._vendLoading=true;vendRerender();
+  try{
+    var headers=jiraHeaders(),tf=await jiraTeamField(headers);if(!tf)throw new Error('no "Team" field found in Jira');
+    var num=tf.replace('customfield_',''),projKey=(localStorage.getItem('plt_jira_epic_project')||'PLT').trim().toUpperCase();
+    var epics=await jiraAll('project = '+projKey+' AND issuetype = Epic AND cf['+num+'] is not EMPTY ORDER BY updated DESC','summary,status,duedate,updated,assignee,'+tf,6,headers);
+    var data={at:Date.now(),epics:{},stats:{}};
+    epics.forEach(function(e){var f=e.fields||{},vid=vendorOfText(teamText(f[tf]));if(!vid)return;data.epics[e.key.toUpperCase()]={k:e.key,n:String(f.summary||''),st:(f.status&&f.status.name)||'',due:f.duedate||'',upd:vendMs(f.updated),a:f.assignee?f.assignee.displayName:'',v:vid};});
+    var keys={};Object.keys(data.epics).forEach(function(k){keys[k]=1;});
+    projects.forEach(function(pr){if(!pr.jiraKey)return;var K=String(pr.jiraKey).toUpperCase(),e=data.epics[K];if(e&&pr.vendorSrc!=='manual'){pr.vendor=e.v;pr.vendorSrc='jira';}if(!pr.archived&&(pr.vendor||VENDORS.some(function(v){return vendViaPct(pr,v.id)>=30;})))keys[K]=1;});
+    var ks=Object.keys(keys),now=Date.now(),PAGES=12,failed=[];
+    for(var i=0;i<ks.length;i++){
+      var K=ks[i],kids;
+      try{kids=await jiraAll('parent = '+K+' ORDER BY updated DESC','status,assignee,resolutiondate,updated,summary',PAGES,headers);}catch(e){failed.push(K);continue;}
+      var s=data.stats[K]={t:0,d:0,ip:0,td:0,bl:0,dc:0,upd:0,dn:[],wk:[],asg:{},trunc:kids.length>=PAGES*100};
+      kids.forEach(function(f0){
+        var f=f0.fields||{};
+        var c=tkCat((f.status&&f.status.name)||''),a=f.assignee?f.assignee.displayName:'',up=vendMs(f.updated);s.t++;if(up>s.upd)s.upd=up;
+        if(c==='done'){s.d++;var rd=vendMs(f.resolutiondate)||up;if(now-rd<=14*864e5){s.dc++;if(s.dn.length<5)s.dn.push([f0.key,String(f.summary||'').slice(0,70),rd,a]);}if(a&&now-rd<=30*864e5)s.asg[a]=(s.asg[a]||0)+1;}
+        else if(c==='active'||c==='qa'){s.ip++;if(s.wk.length<5)s.wk.push([f0.key,String(f.summary||'').slice(0,70),up,a]);if(a)s.asg[a]=(s.asg[a]||0)+1;}
+        else if(c==='blocked')s.bl++;else s.td++;
+      });
+    }
+    try{localStorage.setItem('plt_vendor_data',JSON.stringify(data));}catch(e){}
+    save();
+    if(failed.length)showToast('Loaded \u2014 '+failed.length+' project'+(failed.length>1?'s':'')+' couldn\'t be read from Jira','warn');
+  }catch(e){showToast('Could not load offshore data: '+(e&&e.message||e),'warn');}
+  window._vendLoading=false;vendRerender();
+}
+function vendAutoLoad(){var d=vendData();if(window._vendLoading||window._vendTried)return;window._vendTried=true;if(!jiraReady())return;if(!d||Date.now()-d.at>864e5)vendorRefresh();}
+function vendViaPct(p,vid){return (assignments[p.id]||[]).reduce(function(a,x){var d=devs.find(function(y){return y.id===x.devId;});return a+(d&&d.vendor===vid?(x.pct||0):0);},0);}
+function vendorProjects(vid){
+  var data=vendData(),hidden=vendHidden(),out=[],seen={};
+  projects.forEach(function(p){
+    if(p.archived)return;var K=p.jiraKey?String(p.jiraKey).toUpperCase():'';if(K&&hidden.indexOf(K)>=0)return;
+    var viaEng=p.vendor!==vid&&vendViaPct(p,vid)>=30;
+    if(p.vendor===vid||viaEng){if(K)seen[K]=1;out.push({key:K,name:p.name,ws:p.workstream||'',status:p.status,due:p.deadline||'',pid:p.id,src:p.vendor===vid?(p.vendorSrc==='manual'?'added by you':'Jira Team field'):'via engineers'});}
+  });
+  if(data)Object.keys(data.epics).forEach(function(K){var e=data.epics[K];if(e.v!==vid||seen[K]||hidden.indexOf(K)>=0)return;var ap=projects.find(function(p){return p.jiraKey&&String(p.jiraKey).toUpperCase()===K;});if(ap&&ap.archived)return;out.push({key:K,name:e.n,ws:'',status:mapJiraStatus(e.st),due:e.due||'',pid:null,src:'Jira Team field',jiraStatus:e.st,jiraOnly:true});});
+  return out;
+}
+function vendHide(key){var h=vendHidden();if(key&&h.indexOf(key)<0)h.push(key);try{localStorage.setItem('plt_vendor_hidden',JSON.stringify(h));}catch(e){}var p=projects.find(function(x){return x.jiraKey&&String(x.jiraKey).toUpperCase()===key;});if(p&&p.vendorSrc==='manual'){p.vendor='';p.vendorSrc='';save();}vendRerender();}
+function vendAdd(vid,pid){if(!pid)return;var p=projects.find(function(x){return x.id===pid;});if(!p)return;p.vendor=vid;p.vendorSrc='manual';var K=p.jiraKey?String(p.jiraKey).toUpperCase():'';if(K)try{localStorage.setItem('plt_vendor_hidden',JSON.stringify(vendHidden().filter(function(k){return k!==K;})));}catch(e){}save();vendRerender();}
+function vendAgo(ms){if(!ms)return '';var d=Math.floor((Date.now()-ms)/864e5);return d<=0?'today':d===1?'yesterday':d+'d ago';}
+function vendRerender(){if(view==='team'){try{renderTeamView();}catch(e){}}}
+function vendFilterIds(){var f=window._teamFilter;return f==='off'?VENDORS.map(function(v){return v.id;}):(vendorById(f)?[f]:[]);}
+function vendPanels(){
+  var vids=vendFilterIds();if(!vids.length)return '';
+  var data=vendData(),today=mxIso(Date.now());
+  return vids.map(function(vid){return vendSection(vid,data,today);}).join('')+'<div style="font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--t3);margin:8px 0 10px">Engineers</div>';
+}
+function vendRemoved(n){var l=String(n||'').toLowerCase();return !!l&&removedDevs().some(function(r){return String(r.dev.name||'').toLowerCase()===l;});}
+function vendStats(vid,list,data){
+  var st={projects:list.length,ip:0,dc:0,t:0,d:0,people:{}};
+  list.forEach(function(it){var s=data&&data.stats&&data.stats[it.key];if(!s)return;st.ip+=s.ip;st.dc+=s.dc;st.t+=s.t;st.d+=s.d;Object.keys(s.asg||{}).forEach(function(n){if(!vendRemoved(n))st.people[n]=1;});});
+  devs.forEach(function(d){if(d.vendor===vid)st.people[d.name]=1;});
+  return st;
+}
+function vendToggle(k){var m=window._vendOpen=window._vendOpen||{};m[k]=!m[k];vendRerender();}
+function vendViaToggle(v){var m=window._vendVia=window._vendVia||{};m[v]=!m[v];vendRerender();}
+function vendSection(vid,data,today){
+  var v=vendorById(vid),list=vendorProjects(vid),S=vendStats(vid,list,data);
+  var order={blocked:0,'at-risk':1,'in-progress':2,'on-track':2,planned:3,done:4};
+  var sorter=function(a,b){return (order[a.status]!=null?order[a.status]:3)-(order[b.status]!=null?order[b.status]:3);};
+  var own=list.filter(function(i){return i.src!=='via engineers';}).sort(sorter),via=list.filter(function(i){return i.src==='via engineers';}).sort(sorter);
+  var pct=S.t?Math.round(S.d/S.t*100):null,people=Object.keys(S.people).length;
+  var parts=[list.length+' project'+(list.length===1?'':'s')];
+  if(data){parts.push(S.ip+' in progress');parts.push(S.dc+' done in 14 days');}
+  if(people)parts.push(people+' engineers');if(pct!=null)parts.push(pct+'% done');
+  var have={};list.forEach(function(it){if(it.key)have[it.key]=1;});
+  var opts=projects.filter(function(p){return !p.archived&&p.status!=='done'&&!(p.jiraKey&&have[String(p.jiraKey).toUpperCase()])&&p.vendor!==vid;}).sort(function(a,b){return a.name.localeCompare(b.name);}).map(function(p){return '<option value="'+p.id+'">'+p.name+'</option>';}).join('');
+  var add='<select onchange="vendAdd(\''+vid+'\',this.value);this.value=\'\'" title="Add a project to '+v.name+'" style="border:none;background:transparent;color:var(--acc);font-size:11px;cursor:pointer;max-width:90px;padding:0;-webkit-appearance:none;appearance:none;outline:none"><option value="">+ Add project</option>'+opts+'</select>';
+  var info='Projects come from the Team field on epics in Jira, any you add here, and projects where this team\'s engineers carry 30%+ of the allocation.';
+  var head='<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:4px"><span onclick="vendRename(\''+vid+'\')" title="Click to rename" style="font-size:15px;font-weight:700;cursor:text">'+v.name+'</span><span title="'+info.replace(/"/g,'&quot;')+'" style="font-size:11px;color:var(--t3);cursor:help">\u24d8</span><span style="font-size:11px;color:var(--t3);flex:1">'+parts.join(' \u00b7 ')+'</span>'+add+'</div>';
+  var rows=own.map(function(it){return vendRow(it,data,today);}).join('')||'<div style="font-size:12px;color:var(--t3);padding:12px 2px;border-top:1px solid var(--bdr)">No projects yet. '+(data?'Set the Team field on an epic in Jira, or add one above.':'Loading from Jira\u2026')+'</div>';
+  var viaOpen=!!(window._vendVia||{})[vid];
+  var viaBlock=via.length?'<div onclick="vendViaToggle(\''+vid+'\')" style="font-size:11px;color:var(--t3);padding:8px 2px;cursor:pointer;border-bottom:1px solid var(--bdr)">'+(viaOpen?'\u25be':'\u25b8')+' Also via engineers ('+via.length+')</div>'+(viaOpen?via.map(function(it){return vendRow(it,data,today);}).join(''):''):'';
+  return '<div style="margin-bottom:24px">'+head+'<div style="border-top:1px solid var(--bdr);margin-top:6px">'+rows+viaBlock+'</div></div>';
+}
+function vendRow(it,data,today){
+  var s=data&&data.stats&&data.stats[it.key],k=it.key||it.name,open=!!(window._vendOpen||{})[k],done=it.status==='done';
+  var due=it.due&&/^\d{4}-\d\d-\d\d/.test(it.due)?it.due.slice(0,10):'',over=due&&due<today&&!done;
+  var stCol=it.status==='blocked'?'var(--red)':it.status==='at-risk'?'var(--amb)':(it.status==='in-progress'||it.status==='on-track')?'var(--blu)':it.status==='done'?'var(--grn)':'var(--t3)';
+  var pct=s&&s.t?Math.round(s.d/s.t*100):null;
+  var names=s?Object.keys(s.asg||{}).filter(function(n){return !vendRemoved(n);}).sort(function(a,b){return s.asg[b]-s.asg[a];}).map(function(n){return n.split(' ')[0];}):[];
+  var who=names.slice(0,3).join(', ')+(names.length>3?' +'+(names.length-3):'');
+  var meta=(it.key?it.key:'')+(it.ws?' \u00b7 '+it.ws:'')+(due?' \u00b7 '+(over?'overdue ':'due ')+due.slice(5):'');
+  var bar=pct!=null?'<div title="'+s.d+' of '+s.t+(s.trunc?'+':'')+' issues done" style="display:flex;align-items:center;gap:6px;width:130px;flex-shrink:0"><div style="flex:1;height:4px;background:var(--s2);border-radius:99px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:var(--grn)"></div></div><span style="font-family:var(--mono);font-size:10px;color:var(--t2);width:30px;text-align:right">'+pct+'%</span></div>':'<div style="width:130px;flex-shrink:0"></div>';
+  var rowHtml='<div onclick="vendToggle(\''+String(k).replace(/'/g,"\\'")+'\')" style="display:flex;align-items:center;gap:14px;padding:9px 2px;border-bottom:1px solid var(--bdr);cursor:pointer"><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+it.name+'</div><div style="font-size:10px;color:'+(over?'var(--red)':'var(--t3)')+'">'+meta+'</div></div><span style="width:104px;flex-shrink:0;font-size:11px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:'+stCol+'">'+(it.jiraStatus&&it.jiraOnly?it.jiraStatus:stLbl(it.status))+'</span>'+bar+'<span style="width:150px;flex-shrink:0;font-size:11px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+who+'</span><span style="width:10px;color:var(--t3);font-size:10px">'+(open?'\u25be':'\u25b8')+'</span></div>';
+  if(!open)return rowHtml;
+  var tk=function(arr,col){return arr.slice(0,4).map(function(x){return '<a href="'+JIRA+'/browse/'+x[0]+'" target="_blank" style="display:flex;gap:8px;align-items:baseline;padding:2px 0;text-decoration:none;font-size:11px;color:var(--t)"><span style="font-family:var(--mono);font-size:9px;color:'+col+';flex-shrink:0">'+x[0]+'</span><span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+x[1]+'</span><span style="font-size:9px;color:var(--t3);flex-shrink:0">'+(x[3]&&!vendRemoved(x[3])?x[3].split(' ')[0]+' \u00b7 ':'')+vendAgo(x[2])+'</span></a>';}).join('');};
+  var lab=function(t,c){return '<div style="font-size:9px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:'+c+';margin-bottom:3px">'+t+'</div>';};
+  var left=s&&s.wk&&s.wk.length?lab('In progress ('+s.ip+')','var(--t3)')+tk(s.wk,'var(--acc)'):'<div style="font-size:11px;color:var(--t3)">'+(s?'Nothing in progress':(it.key?'Refresh from Jira for progress':'No Jira key'))+'</div>';
+  var right=s&&s.dn&&s.dn.length?lab('Done recently ('+s.dc+')','var(--grn)')+tk(s.dn,'var(--grn)'):'';
+  var foot='<div style="grid-column:1/-1;font-size:10px;color:var(--t3);display:flex;gap:12px;align-items:center">'+(s&&s.t?'<span>'+s.d+' of '+s.t+(s.trunc?'+':'')+' issues done'+(s.bl?' \u00b7 <span style="color:var(--red)">'+s.bl+' blocked</span>':'')+'</span>':'')+(s&&s.upd?'<span>updated '+vendAgo(s.upd)+'</span>':'')+'<span>'+it.src+'</span>'+(it.key?'<a href="'+JIRA+'/browse/'+it.key+'" target="_blank" style="color:var(--acc);text-decoration:none">Open in Jira \u2197</a><span onclick="event.stopPropagation();vendHide(\''+it.key+'\')" style="cursor:pointer">Remove from team</span>':'')+'</div>';
+  return rowHtml+'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;padding:8px 2px 14px;border-bottom:1px solid var(--bdr)">'+'<div>'+left+'</div><div>'+right+'</div>'+foot+'</div>';
+}
+function vendCopy(){
+  var data=vendData(),vids=vendFilterIds();if(!vids.length)vids=VENDORS.map(function(v){return v.id;});var lines=[];
+  vids.forEach(function(vid){var v=vendorById(vid),list=vendorProjects(vid);lines.push(v.name+' \u2014 '+list.length+' project'+(list.length===1?'':'s'));
+    list.forEach(function(it){var s=data&&data.stats&&data.stats[it.key];lines.push('\u2022 '+it.name+' ['+(it.jiraStatus||stLbl(it.status))+']'+(s&&s.t?' \u2014 '+s.d+'/'+s.t+' issues done ('+Math.round(s.d/s.t*100)+'%)':'')+(s&&s.ip?', '+s.ip+' in progress':'')+(it.due?', due '+String(it.due).slice(0,10):''));});lines.push('');});
+  var txt=lines.join('\n').trim();
+  try{if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(function(){showToast('Summary copied','info');},function(){window.prompt('Copy this summary:',txt);});return;}}catch(e){}
+  window.prompt('Copy this summary:',txt);
+}
+function openOffshore(){setView('team');setTeamFilter('off');}
 function setQ(q){activeQ=q;renderBoard();}
 function toggleWs(ws){collapseState[ws]=!collapseState[ws];save();renderBoard();}
 function autoRag(p){if(p.status==='blocked')return'red';if(p.status==='at-risk')return'amber';if(p.status==='done')return'green';const dc=dateCls(p.deadline);if(dc==='overdue')return'red';if(dc==='soon'&&p.status!=='done')return'amber';return'green';}
@@ -924,7 +1217,7 @@ function selProject(pid){
   const qa=unassigned.length?'<select onchange="if(this.value){quickAssign(\''+pid+'\',this.value)}" style="width:100%;padding:8px 10px;border:1px solid var(--bdr);border-radius:var(--r);background:var(--sur);font-size:12px;color:var(--t);cursor:pointer"><option value="">+ Add someone\u2026</option>'+opts+'</select><div style="font-size:9px;color:var(--t3);margin-top:5px">Sorted by who has the most room \u00b7 % is their current load</div>':'<div style="font-size:11px;color:var(--t3)">Everyone is already assigned.</div>';
   const flagPresets=[{emoji:'🔴',label:'Blocked',color:'red'},{emoji:'⚡',label:'High priority',color:'amber'},{emoji:'👀',label:'Needs review',color:'blue'},{emoji:'🧊',label:'On hold',color:'gray'},{emoji:'✅',label:'Ready',color:'green'},{emoji:'⚠️',label:'At risk',color:'amber'},{emoji:'💜',label:'Strategic',color:'purple'}];
   panel.innerHTML='<div class="dp-head"><div><div class="dp-title">'+p.name+'</div><div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap"><span class="dot '+sdCls(p.status)+'"></span><span style="font-size:11px;color:var(--t2)">'+stLbl(p.status)+'</span><span style="font-size:10px;color:'+wsCol(p.workstream||'Unassigned')+'">'+(p.workstream||'Unassigned')+'</span>'+(p.jiraKey?'<a href="'+JIRA+'/browse/'+p.jiraKey+'" target="_blank" style="font-size:10px;font-family:var(--mono);color:var(--acc);text-decoration:none">'+p.jiraKey+' ↗</a>':'<span style="font-size:9px;padding:1px 6px;border-radius:99px;background:var(--s2);color:var(--t3)">non-Jira</span>')+'</div></div><button class="ib" onclick="togglePin(\''+pid+'\')" title="'+(p.pinned?'Unpin from Overview':'Pin to Overview')+'" style="color:'+(p.pinned?'var(--amb)':'var(--t3)')+'">'+(p.pinned?'★':'☆')+'</button><button class="ib" onclick="closeDetail()"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="1" y1="1" x2="11" y2="11"/><line x1="11" y1="1" x2="1" y2="11"/></svg></button></div>'+
-    '<div class="sec"><div class="sec-lbl">Details'+(p.statusOverride?' <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--acc);font-size:9px">· status set by you · <a onclick="revertProjStatus(\''+pid+'\')" style="cursor:pointer">use Jira</a></span>':(p.statusFromJira||p.dateFromJira)?' <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--t3);font-size:9px">· synced from Jira</span>':'')+'</div><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><select onchange="setProjStatus(\''+pid+'\',this.value)" style="font-size:11px;padding:4px 7px;border:1px solid var(--bdr);border-radius:var(--r);font-family:inherit;background:var(--sur);cursor:pointer">'+['in-progress','at-risk','blocked','planned','done'].map(s=>'<option value="'+s+'"'+(p.status===s||(s==='in-progress'&&p.status==='on-track')?' selected':'')+'>'+stLbl(s)+'</option>').join('')+'</select><select onchange="updateProjField(\''+pid+'\',\'workstream\',this.value)" style="font-size:11px;padding:4px 7px;border:1px solid var(--bdr);border-radius:var(--r);font-family:inherit;background:var(--sur);cursor:pointer">'+WS_ORDER.map(ws=>'<option value="'+ws+'"'+(p.workstream===ws?' selected':'')+'>'+ws+'</option>').join('')+'</select><input type="date" value="'+(p.deadline||'')+'" title="Deadline" style="font-size:11px;padding:4px 7px;border:1px solid var(--bdr);border-radius:var(--r);font-family:inherit;outline:none;background:var(--sur);color:var(--t)" onchange="updateProjField(\''+pid+'\',\'deadline\',this.value)"></div></div>'+
+    '<div class="sec"><div class="sec-lbl">Details'+(p.statusOverride?' <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--acc);font-size:9px">· status set by you · <a onclick="revertProjStatus(\''+pid+'\')" style="cursor:pointer">use Jira</a></span>':(p.statusFromJira||p.dateFromJira)?' <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--t3);font-size:9px">· synced from Jira</span>':'')+'</div><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><select onchange="setProjStatus(\''+pid+'\',this.value)" style="font-size:11px;padding:4px 7px;border:1px solid var(--bdr);border-radius:var(--r);font-family:inherit;background:var(--sur);cursor:pointer">'+['in-progress','at-risk','blocked','planned','done'].map(s=>'<option value="'+s+'"'+(p.status===s||(s==='in-progress'&&p.status==='on-track')?' selected':'')+'>'+stLbl(s)+'</option>').join('')+'</select><select onchange="updateProjField(\''+pid+'\',\'workstream\',this.value)" style="font-size:11px;padding:4px 7px;border:1px solid var(--bdr);border-radius:var(--r);font-family:inherit;background:var(--sur);cursor:pointer">'+wsAll().map(ws=>'<option value="'+ws+'"'+(p.workstream===ws?' selected':'')+'>'+ws+'</option>').join('')+'</select><input type="date" value="'+(p.deadline||'')+'" title="Deadline" style="font-size:11px;padding:4px 7px;border:1px solid var(--bdr);border-radius:var(--r);font-family:inherit;outline:none;background:var(--sur);color:var(--t)" onchange="updateProjField(\''+pid+'\',\'deadline\',this.value)"></div></div>'+
     '<div class="sec"><div class="sec-lbl">People ('+mems.length+(mems.length?' · '+mems.reduce((s,a)=>s+a.pct,0)+'%':'')+')</div>'+(allocRows||'<div style="font-size:11px;color:var(--t3);padding:4px 0">No one assigned yet</div>')+'<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bdr)">'+qa+'</div></div>'+
     milestonesSection(p)+'<div class="sec"><div class="sec-lbl">Notes</div><textarea class="notes" placeholder="Context, blockers, links…" oninput="updateProjField(\''+pid+'\',\'notes\',this.value)">'+(p.notes||'')+'</textarea></div>'+
     '<div class="sec" style="padding-bottom:20px;display:flex;gap:8px"><button class="btn" onclick="archiveProj(\''+pid+'\')" style="color:var(--t3);font-size:10px">Park project</button></div>';
@@ -945,6 +1238,7 @@ function quickAssign(pid,devId){if(!assignments[pid])assignments[pid]=[];if(assi
 function archiveProj(pid){const p=projects.find(x=>x.id===pid);if(!p)return;p.archived=true;save();closeDetail();renderBoard();renderSummary();}
 function parkProject(pid,ev){if(ev)ev.stopPropagation();const p=projects.find(x=>x.id===pid);if(!p)return;p.archived=true;p.pinned=false;save();if(view==='board')renderBoard();if(view==='overview')renderOverview();showToast('Parked "'+p.name.slice(0,30)+'" — restore in Parked section','info');}
 function unparkProject(pid,ev){if(ev)ev.stopPropagation();const p=projects.find(x=>x.id===pid);if(!p)return;p.archived=false;save();if(view==='board')renderBoard();if(view==='overview')renderOverview();showToast('Restored "'+p.name.slice(0,30)+'"','info');}
+function toggleDoneWs(ws){var m=window._showDoneWs=window._showDoneWs||{};m[ws]=!m[ws];renderBoard();}
 function toggleDoneSection(){window._showDone=!window._showDone;renderBoard();}
 function toggleParkedSection(){window._showParked=!window._showParked;renderBoard();}
 function addProjFlag(pid,label,color,emoji){const p=projects.find(x=>x.id===pid);if(!p)return;if(!p.flags)p.flags=[];if(!p.flags.find(f=>f.label===label))p.flags.push({label:label,color:color||'blue',emoji:emoji||''});save();selProject(pid);renderBoard();}
@@ -1123,11 +1417,11 @@ function renderTeamView(){
   function stDot(pct,cap){if(pct>=cap)return{col:'var(--red)',txt:'Over capacity'};if(pct>=cap*.8)return{col:'var(--amb)',txt:'Near capacity'};if(pct<20)return{col:'var(--grn)',txt:'Available'};return{col:'var(--acc)',txt:'Active'};}
   const rows=sorted.map(dev=>{const pct=alloc(dev.id),cap=dev.capacity||100,st=stDot(pct,cap);const projCount=projects.filter(p=>!p.archived&&p.status!=='done'&&(assignments[p.id]||[]).find(a=>a.devId===dev.id)).length;const gh=ghData[dev.id];return '<div class="tv-row" data-devid="'+dev.id+'" onclick="openTeamDevDetail(\''+dev.id+'\')"><div style="position:relative;flex-shrink:0">'+avEl(dev,28)+'<div style="position:absolute;bottom:0;right:0;width:8px;height:8px;border-radius:50%;background:'+st.col+';border:1.5px solid var(--sur)" title="'+st.txt+'"></div></div><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+dev.name+(dev.offshore?' <span class="off-tag">offshore</span>':'')+'</div><div style="font-size:10px;color:var(--t2)">'+(dev.role||'Engineer')+'</div></div><div style="display:flex;align-items:center;gap:5px;flex-shrink:0"><div style="width:44px;height:3px;background:var(--s2);border-radius:99px;overflow:hidden"><div style="height:100%;width:'+Math.min(pct/cap*100,100)+'%;background:'+st.col+';border-radius:99px"></div></div><span style="font-size:11px;font-family:var(--mono);color:'+st.col+';font-weight:600;min-width:32px">'+pct+'%</span></div><span style="font-size:10px;color:var(--t2);flex-shrink:0;width:36px;text-align:right">'+projCount+'p</span><span style="font-size:10px;font-family:var(--mono);color:var(--t2);flex-shrink:0;width:66px;text-align:right">'+(gh?gh.prs+'pr·'+gh.merged+'mg':'—')+'</span></div>';}).join('');
   const et=window.engTickets||{};
-  const withTk=devs.filter(d=>et[d.id]&&et[d.id].tickets&&et[d.id].tickets.length);
+  const withTk=tvDevs().filter(d=>et[d.id]&&et[d.id].tickets&&et[d.id].tickets.length);
   const totTk=withTk.reduce((s,d)=>s+et[d.id].tickets.filter(tkShown).length,0),totPts=withTk.reduce((s,d)=>s+engStats(et[d.id]).tot,0);
-  const overCap=devs.filter(d=>alloc(d.id)>=(d.capacity||100)).length,avail=devs.filter(d=>alloc(d.id)<(d.capacity||100)*.8).length;
+  const _sc=tvDevs().map(capScore);const overCap=_sc.filter(r=>r.bucket==='cap').length,avail=_sc.filter(r=>r.bucket==='free').length;
   el.innerHTML='<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">'+
-    '<div style="padding:10px 14px 9px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;flex-shrink:0"><div><div style="font-size:12px;font-weight:600">Engineer progress</div><div style="font-size:10px;color:var(--t2);margin-top:1px">'+devs.length+' engineers'+(totPts?' · '+totTk+' tickets · '+totPts+' pts':'')+' · '+avail+' available · '+overCap+' over capacity</div></div><div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end"><button class="fb" onclick="openAvailabilityForecast()">Who\'s free</button><button class="fb" id="tv-tickets-btn" onclick="switchTeamSubview(\'tickets\')">All tickets</button><button class="fb" onclick="openAddDevModal()">+ Add</button></div></div>'+
+    '<div style="padding:10px 14px 9px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;flex-shrink:0"><div><div style="font-size:12px;font-weight:600">People</div><div style="font-size:10px;color:var(--t3);margin-top:1px">'+tvDevs().length+' engineers · '+overCap+' at capacity · '+avail+' free</div></div><div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end"><button class="fb" onclick="openAvailabilityForecast()">Who\'s free</button><button class="fb" id="tv-tickets-btn" onclick="switchTeamSubview(\'tickets\')">All tickets</button><button class="fb" onclick="openManageTeam()">Manage</button></div></div>'+
     '<div id="tv-grid" style="flex:1;overflow-y:auto;padding:14px">'+renderEngProgressGrid()+'</div>'+
     '<div id="tv-detail-panel" style="display:none;position:absolute;inset:0;background:var(--bg);z-index:6;overflow-y:auto"></div>'+
     '<div id="tv-heat-section" style="display:none;position:absolute;inset:0;background:var(--bg);z-index:5;overflow:auto;padding:14px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><div style="font-size:13px;font-weight:600">Team Heatmap</div><button class="btn" onclick="switchTeamSubview(\'roster\')">← Back</button></div><div id="tv-heat-content"></div></div>'+
@@ -1168,13 +1462,13 @@ function tkTypeShort(it){it=(it||'').toLowerCase();if(it.indexOf('sub')>=0)retur
 function tkTypeCol(it){it=(it||'').toLowerCase();if(it.indexOf('bug')>=0||it.indexOf('defect')>=0)return 'var(--red)';if(it.indexOf('story')>=0)return 'var(--grn)';if(it.indexOf('sub')>=0)return 'var(--blu)';return 'var(--t3)';}
 function tkListHTML(arr){var row=function(t){return '<a href="'+JIRA+'/browse/'+t.k+'" target="_blank" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--bdr);border-radius:var(--r);margin-bottom:3px;text-decoration:none;background:var(--sur)"><span style="font-family:var(--mono);font-size:10px;color:var(--acc);flex-shrink:0">'+t.k+'</span>'+(t.it?'<span style="font-size:8px;font-weight:600;padding:1px 5px;border-radius:99px;background:var(--s2);color:'+tkTypeCol(t.it)+';flex-shrink:0">'+tkTypeShort(t.it)+'</span>':'')+'<span style="font-size:11px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--t)">'+t.s+'</span><span style="font-size:10px;font-family:var(--mono);color:var(--t3);flex-shrink:0">'+(t.p!=null?t.p:'–')+'</span>'+((tkCat(t.st)==='blocked'&&t.u)?blockedAgeChip(t.u):'')+tkStatusBadge(t.st)+'</a>';};if(arr.length<=8)return arr.map(row).join('');return arr.slice(0,8).map(row).join('')+'<details style="margin-top:1px"><summary style="font-size:10px;color:var(--acc);cursor:pointer;list-style:none;padding:4px 2px">Show all '+arr.length+' \u2192</summary>'+arr.slice(8).map(row).join('')+'</details>';}
   function tkGroup(title,arr,col){return arr.length?'<div style="margin-top:14px"><div style="font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:'+col+';margin-bottom:6px">'+title+' ('+arr.length+' · '+arr.reduce((s,t)=>s+(t.p||0),0)+' pts)</div>'+tkListHTML(arr)+'</div>':'';}
-  let ticketBlock='';
+  let ticketBlock='<div id="vel-e" class="chart-card" style="margin-top:16px"></div>';
   if(etRec&&etRec.tickets&&etRec.tickets.length){
     const s=engStats(etRec);
     const cur=etRec.tickets.filter(t=>{const c=tkCat(t.st);return c==='active'||c==='qa';});
     const up=etRec.tickets.filter(tkUpcoming);
     const dn=etRec.tickets.filter(t=>tkCat(t.st)==='done'&&tkDoneRecent(t));
-    ticketBlock='<div style="margin-top:16px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><div style="font-size:11px;font-weight:600">Current work · '+s.tot+' pts · '+s.donePct+'% done</div></div>'+engBar(s.cats,s.tot)+
+    ticketBlock+='<div style="margin-top:16px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><div style="font-size:11px;font-weight:600">Current work · '+s.tot+' pts · '+s.donePct+'% done</div></div>'+engBar(s.cats,s.tot)+
       recentWorkGroup(devId)+
       inFlightSummary(cur)+
       collapsedGroup('Upcoming',up,'var(--t2)')+
@@ -1183,8 +1477,9 @@ function tkListHTML(arr){var row=function(t){return '<a href="'+JIRA+'/browse/'+
   }
   const workContent='<div><div style="font-size:10px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--t3);margin-bottom:8px">Active Projects ('+devProjs.length+')</div>'+(devProjs.length?devProjs.map(p=>{const a=(assignments[p.id]||[]).find(x=>x.devId===devId);const ws=p.workstream||'Unassigned',wcol=wsCol(ws),dc=dateCls(p.deadline);return '<div class="dev-proj-row" onclick="setView(\'board\');setTimeout(()=>selProject(\''+p.id+'\'),100)"><div style="width:3px;height:24px;border-radius:99px;background:'+wcol+';flex-shrink:0"></div><div style="flex:1;min-width:0"><div style="font-size:11px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+p.name+'</div><div style="font-size:10px;color:'+wcol+'">'+ws+(dc&&p.deadline?' · <span class="pc-date '+dc+'">'+p.deadline+'</span>':'')+'</div></div><span style="font-size:11px;font-family:var(--mono);color:'+col+';font-weight:600;flex-shrink:0">'+(a&&a.src==='plan'?'<span class="plan-chip">plan</span>':'')+(a?a.pct+'%':'')+'</span></div>';}).join(''):'<div style="font-size:11px;color:var(--t3);padding:8px 0">No active projects assigned</div>')+devDeliveryPanel(devId)+ticketBlock+'</div>';
   const ghContent=gh?'<div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px">'+[{v:gh.prs||0,l:'PRs 30d',c:'#7C3AED'},{v:gh.merged||0,l:'Merged',c:'var(--grn)'},{v:gh.openPRs||0,l:'Open',c:(gh.openPRs||0)>3?'var(--amb)':'var(--t)'},{v:gh.avgCycleDays!=null?gh.avgCycleDays+'d':'—',l:'Cycle avg',c:gh.avgCycleDays!=null?(gh.avgCycleDays<=5?'var(--grn)':gh.avgCycleDays<=14?'var(--amb)':'var(--red)'):'var(--t3)'}].map(s=>'<div style="background:var(--sur);border:1px solid var(--bdr);border-radius:var(--r);padding:8px;text-align:center"><div style="font-size:15px;font-weight:700;font-family:var(--mono);color:'+s.c+'">'+s.v+'</div><div style="font-size:9px;color:var(--t2)">'+s.l+'</div></div>').join('')+'</div>'+(gh.prList&&gh.prList.length?'<div style="font-size:10px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--t3);margin-bottom:6px">Recent PRs</div>'+gh.prList.slice(0,10).map(pr=>{const sl=pr.merged?'Merged':pr.state==='open'?'Open':'Closed';const stCol=pr.merged?'var(--grn)':pr.state==='open'?'var(--acc)':'var(--t3)';return '<a href="'+pr.url+'" target="_blank" style="display:flex;align-items:center;gap:6px;padding:6px 8px;border:1px solid var(--bdr);border-radius:var(--r);margin-bottom:3px;text-decoration:none;color:var(--t);background:var(--sur)"><span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:99px;background:'+(pr.merged?'var(--grn-l)':pr.state==='open'?'var(--acc-l)':'var(--s2)')+';color:'+stCol+';flex-shrink:0">'+sl+'</span><span style="font-size:11px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+pr.title+'</span><span style="font-size:9px;font-family:var(--mono);color:var(--t3);flex-shrink:0">'+pr.repo+'</span><span style="font-size:9px;color:var(--t3);flex-shrink:0">'+pr.daysOpen+'d</span></a>';}).join(''):'<div style="font-size:11px;color:var(--t3)">No PR data — sync GitHub first</div>')+'</div>':'<div style="padding:20px;text-align:center;font-size:11px;color:var(--t3)">No GitHub data — go to ⚙️ → GitHub to sync</div>';
+  setTimeout(function(){velInit('e',devId);},0);
   panel.style.display='block';
-  panel.innerHTML='<div style="padding:14px 16px;max-width:760px;margin:0 auto"><button class="btn" onclick="showTeamMetrics()" style="font-size:10px;margin-bottom:10px">← All engineers</button><div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">'+avEl(dev,40)+'<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600">'+dev.name+'</div><div style="display:flex;align-items:center;gap:6px;margin-top:3px;flex-wrap:wrap"><span style="font-size:11px;font-family:var(--mono);color:'+col+';font-weight:600">'+(function(){var pp=allocParts(dev.id);return pp.plan>0?pp.total+'% projected <span style="color:#7C3AED;font-weight:400">('+pp.jira+'% actual + '+pp.plan+' plan)</span>':pp.jira+'% allocated';})()+'</span>'+(dev.offshore?'<span class="off-tag">offshore 🌐</span>':'')+(pct>=cap?'<span style="font-size:10px;color:var(--red)">● over capacity</span>':pct<20?'<span style="font-size:10px;color:var(--grn)">● available</span>':'')+'</div></div></div><div style="display:flex;border-bottom:1px solid var(--bdr);margin-bottom:12px"><button class="vs-btn on" id="tvt-work" onclick="switchDevTab(\'work\')" style="padding:7px 12px">Work</button><button class="vs-btn" id="tvt-gh" onclick="switchDevTab(\'gh\')" style="padding:7px 12px">GitHub</button></div><div id="tvt-work-content">'+workContent+'</div><div id="tvt-gh-content" style="display:none">'+ghContent+'</div></div>';
+  panel.innerHTML='<div style="padding:14px 16px;max-width:760px;margin:0 auto"><button class="btn" onclick="showTeamMetrics()" style="font-size:10px;margin-bottom:10px">← All engineers</button><button class="btn" onclick="openEditDevModal(\''+devId+'\')" style="font-size:10px;margin:0 0 10px 6px">Edit / remove</button><div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">'+avEl(dev,40)+'<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600">'+dev.name+'</div><div style="display:flex;align-items:center;gap:6px;margin-top:3px;flex-wrap:wrap"><span style="font-size:11px;font-family:var(--mono);color:'+col+';font-weight:600">'+(function(){var pp=allocParts(dev.id);return pp.plan>0?pp.total+'% projected <span style="color:#7C3AED;font-weight:400">('+pp.jira+'% actual + '+pp.plan+' plan)</span>':pp.jira+'% allocated';})()+'</span>'+(dev.offshore?'<span class="off-tag">offshore 🌐</span>':'')+(pct>=cap?'<span style="font-size:10px;color:var(--red)">● over capacity</span>':pct<20?'<span style="font-size:10px;color:var(--grn)">● available</span>':'')+'</div></div></div><div style="display:flex;border-bottom:1px solid var(--bdr);margin-bottom:12px"><button class="vs-btn on" id="tvt-work" onclick="switchDevTab(\'work\')" style="padding:7px 12px">Work</button><button class="vs-btn" id="tvt-gh" onclick="switchDevTab(\'gh\')" style="padding:7px 12px">GitHub</button></div><div id="tvt-work-content">'+workContent+'</div><div id="tvt-gh-content" style="display:none">'+ghContent+'</div></div>';
 }
 function switchDevTab(tab){document.getElementById('tvt-work').classList.toggle('on',tab==='work');document.getElementById('tvt-gh').classList.toggle('on',tab==='gh');document.getElementById('tvt-work-content').style.display=tab==='work'?'':'none';document.getElementById('tvt-gh-content').style.display=tab==='gh'?'':'none';}
 function switchTeamSubview(sub){
@@ -1198,30 +1493,22 @@ function switchTeamSubview(sub){
   else if(sub==='tickets'){if(tkSec)tkSec.style.display='flex';if(tkBtn)tkBtn.classList.add('on');const target=document.getElementById('tv-tickets-content');if(target)target.innerHTML=renderEngBreakdown();}
 }
 // ── Engineer ticket breakdown (Jira) ──
-function peopleStrip(){
-  var gh=window.ghData||{};var cap=0,avail=0;var loads=[];
-  devs.forEach(function(d){var g=gh[d.id]||{};var L=devLoad(d.id);var load=(g.openPRs||0)*2+L.n;loads.push(load);if(load>=4)cap++;if(load<=0)avail++;});
-  var km=window.kanbanMetrics||{};var ship=km.shippedAvg!=null?km.shippedAvg:null;
-  var sorted=loads.slice().sort(function(a,b){return b-a;});
-  var bar='<div style="display:flex;gap:2px;height:8px;margin-top:10px">'+sorted.map(function(l){var col=l>=4?'var(--red)':l>=2?'var(--amb)':l>=1?'var(--acc)':'var(--grn)';return '<div style="flex:1;background:'+col+';border-radius:1px"></div>';}).join('')+'</div>';
-  var stat=function(v,l,col){return '<div><span style="font-size:20px;font-weight:600;color:'+(col||'var(--t)')+'">'+v+'</span> <span style="font-size:11px;color:var(--t3)">'+l+'</span></div>';};
-  return '<div style="margin-bottom:18px"><div style="display:flex;gap:24px;align-items:baseline;flex-wrap:wrap">'+stat(devs.length,'engineers')+stat(cap,'at capacity',cap>0?'var(--red)':'var(--t)')+stat(avail,'available','var(--grn)')+(ship!=null?stat('~'+ship,'deployments/wk','var(--grn)'):'')+'</div>'+bar+'<div style="display:flex;justify-content:space-between;font-size:9px;color:var(--t3);margin-top:3px"><span>slammed</span><span>free</span></div></div>';
-}
 function renderEngProgressGrid(){
   const et=window.engTickets||{};
-  const withTk=devs.filter(d=>et[d.id]&&et[d.id].tickets&&et[d.id].tickets.length).map(d=>({d:d,s:engStats(et[d.id]),rec:et[d.id]})).sort((a,b)=>b.s.tot-a.s.tot);
-  const noTk=devs.filter(d=>!(et[d.id]&&et[d.id].tickets&&et[d.id].tickets.length));
-  const card=(d,s,rec)=>{var g=(window.ghData||{})[d.id]||{};var L=devLoad(d.id);var pr=g.openPRs||0;var load=pr*2+L.n;var col=load>=4?'var(--red)':load>=2?'var(--amb)':load>=1?'var(--acc)':'var(--grn)';var sig=pr>0?(pr+' open PR'+(pr>1?'s':'')):(L.n>0?L.n+' in flight':'available');var barW=Math.min(100,Math.max(4,Math.round(load/5*100)));return '<div class="eng-card" onclick="openTeamDevDetail(\''+d.id+'\')"><div style="display:flex;align-items:center;gap:9px;margin-bottom:9px">'+avEl(d,32)+'<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+d.name+'</div><div style="font-size:10px;margin-top:1px;color:'+(load===0?'var(--grn)':'var(--t2)')+'">'+sig+'</div></div></div><div style="height:5px;background:var(--s2);border-radius:99px;overflow:hidden"><div style="width:'+barW+'%;height:100%;background:'+col+'"></div></div></div>';};
-  withTk.sort(function(a,b){var la=(((window.ghData||{})[a.d.id]||{}).openPRs||0)*2+devLoad(a.d.id).n;var lb=(((window.ghData||{})[b.d.id]||{}).openPRs||0)*2+devLoad(b.d.id).n;return lb-la;});const cards=withTk.map(x=>card(x.d,x.s,x.rec)).join('');
+  const withTk=tvDevs().filter(d=>et[d.id]&&et[d.id].tickets&&et[d.id].tickets.length).map(d=>({d:d,s:engStats(et[d.id]),rec:et[d.id]})).sort((a,b)=>b.s.tot-a.s.tot);
+  const noTk=tvDevs().filter(d=>!(et[d.id]&&et[d.id].tickets&&et[d.id].tickets.length));
+  const card=(d,s,rec)=>{var sc=capScore(d);var L=devLoad(d.id);var C=capCfg();var col=sc.total>C.busy?'var(--red)':sc.total>=C.room?'var(--amb)':sc.total>=C.free?'var(--acc)':'var(--grn)';var sig=Math.round(sc.total)+'% of capacity'+(L.n>0?' \u00b7 '+L.n+' in flight':'');var load=sc.total<C.free?0:sc.total;var barW=Math.min(100,Math.max(4,Math.round(sc.total)));return '<div class="eng-card" onclick="openTeamDevDetail(\''+d.id+'\')"><div style="display:flex;align-items:center;gap:9px;margin-bottom:9px">'+avEl(d,32)+'<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+d.name+'</div><div style="font-size:10px;margin-top:1px;color:'+(load===0?'var(--grn)':'var(--t2)')+'">'+sig+'</div></div></div><div style="height:5px;background:var(--s2);border-radius:99px;overflow:hidden"><div style="width:'+barW+'%;height:100%;background:'+col+'"></div></div></div>';};
+  withTk.sort(function(a,b){return capScore(b.d).total-capScore(a.d).total;});const cards=withTk.map(x=>card(x.d,x.s,x.rec)).join('');
   const others=noTk.length?'<div style="grid-column:1/-1;font-size:10px;color:var(--t3);margin:6px 0 2px">No tickets</div>'+noTk.map(d=>{const pct=alloc(d.id);return '<div class="eng-card eng-card-muted" onclick="openTeamDevDetail(\''+d.id+'\')"><div style="display:flex;align-items:center;gap:9px">'+avEl(d,28)+'<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+d.name+'</div><div style="font-size:10px;color:var(--t3)">'+(d.role||'Engineer')+(pct?' · '+pct+'% alloc':'')+'</div></div></div></div>';}).join(''):'';
   const legend='<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:14px;font-size:10px;color:var(--t2)">'+[['Done','var(--grn)'],['Active','var(--acc)'],['QA','#7C3AED'],['To Do','var(--t3)']].map(([l,c])=>'<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:2px;background:'+c+'"></span>'+l+'</span>').join('')+'</div>';
-  return peopleStrip()+'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px">'+cards+others+'</div>'+legend;
+  return teamFilterChips()+vendPanels()+'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px">'+cards+others+'</div>';
 }
 // ── Engineer ticket breakdown (Jira) ──
 function tkCat(st){st=(st||'').toLowerCase().trim();if(st==='done'||st==='ready for release'||st==='closed'||st==='resolved'||st==='released'||st==='complete'||st==='completed')return 'done';if(st.indexOf('qa')>=0||st.indexOf('review - qa')>=0||st.indexOf('testing')>=0)return 'qa';if(st.indexOf('block')>=0||st.indexOf('hold')>=0||st.indexOf('impediment')>=0)return 'blocked';if(st==='to do'||st.indexOf('ready for dev')>=0||st==='backlog'||st==='open'||st==='new'||st.indexOf('selected for dev')>=0||st==='ready'||st==='reopened'||st==='ready for development')return 'todo';return 'active';}function tkStateWeight(st){var c=tkCat(st);return c==='active'?1:c==='qa'?0.5:c==='blocked'?0.5:c==='todo'?0.35:0;}
 function isReadyForDev(st){var s=(st||'').toLowerCase().trim();return s.indexOf('ready for dev')>=0||s==='ready for development'||s.indexOf('selected for dev')>=0;}
 function tkCatCol(c){return c==='done'?'var(--grn)':c==='qa'?'#7C3AED':c==='blocked'?'var(--red)':c==='todo'?'var(--t3)':'var(--acc)';}
 function tkStatusBadge(st){const c=tkCat(st);const col=tkCatCol(c);const bg=c==='done'?'var(--grn-l)':c==='qa'?'rgba(124,58,237,.12)':c==='blocked'?'var(--red-l)':c==='todo'?'var(--s2)':'var(--acc-l)';return '<span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:99px;background:'+bg+';color:'+col+';white-space:nowrap">'+st+'</span>';}
+function tkFresh(t,days){var u=t&&t.u?Date.parse(t.u):NaN;return isNaN(u)||(Date.now()-u)<=(days||30)*864e5;}
 function tkDoneRecent(t){var d=t.r||t.u;if(!d)return false;var a=Date.now()-Date.parse(d);return !isNaN(a)&&a<=21*864e5;}
 function tkUpcoming(t){if(!isReadyForDev(t.st))return false;if(!t.u)return true;var a=Date.now()-Date.parse(t.u);return isNaN(a)||a<=60*864e5;}
 function tkShown(t){var c=tkCat(t.st);if(c==='done')return tkDoneRecent(t);if(c==='active'||c==='qa')return true;if(c==='blocked')return false;return tkUpcoming(t);}
@@ -1341,7 +1628,7 @@ function chartWorkstreamPie(){
 function chartWorkstreamLoad(){
   const active=projects.filter(p=>!p.archived);
   const wsSet={};active.forEach(p=>{wsSet[p.workstream||'Unassigned']=1;});
-  const rows=WS_ORDER.filter(ws=>wsSet[ws]);
+  const rows=wsAll().filter(ws=>wsSet[ws]);
   if(!rows.length)return '<div class="spark-empty">No projects yet</div>';
   const stat=(n,l,c)=>n>0?'<span style="color:'+c+';font-size:10px;font-family:var(--mono);white-space:nowrap"><b>'+n+'</b> '+l+'</span>':'';
   return rows.map(ws=>{const col=wsCol(ws);const ps=active.filter(p=>(p.workstream||'Unassigned')===ws);
@@ -1420,12 +1707,13 @@ function openPortfolioDetail(kind){
 function availForecast(){
   const et=window.engTickets||{};const km=window.kanbanMetrics||{};
   return devs.map(d=>{
-    const rec=et[d.id];const tickets=(rec&&rec.tickets)||[];
-    const inProg=tickets.filter(t=>tkCat(t.st)!=='done'&&tkCat(t.st)!=='todo').length;
-    const blocked=tickets.filter(t=>tkCat(t.st)==='blocked').length;
-    const upcoming=tickets.filter(t=>tkCat(t.st)==='todo').length;
-    const remaining=tickets.filter(t=>tkCat(t.st)!=='done').length;
-    const a=alloc(d.id);const bd=km.byDev&&km.byDev[d.id];
+    const rec=et[d.id];
+    const tickets=((rec&&rec.tickets)||[]).filter(t=>{const c=tkCat(t.st);return c==='done'?false:(c==='active'||c==='qa')?tkFresh(t):c==='todo'?tkUpcoming(t):false;});
+    const inProg=tickets.filter(t=>{const c=tkCat(t.st);return c==='active'||c==='qa';}).length;
+    const blocked=0;
+    const upcoming=tickets.length-inProg;
+    const remaining=tickets.length;
+    const a=Math.round(capScore(d).total);const bd=km.byDev&&km.byDev[d.id];
     const thr=(bd&&bd.thruAvg)||0;const cyc=(bd&&bd.cycleP50)||null;
     let eta;
     if(remaining===0)eta=0;
@@ -1438,8 +1726,8 @@ function availForecast(){
 function etaLabel(r){if(r.remaining===0)return 'free now';if(r.eta==null)return '~';if(r.eta===0)return 'free now';if(r.eta<=7)return '~'+r.eta+'d';const w=Math.round(r.eta/7);return '~'+w+' wk'+(w>1?'s':'');}
 function openAvailabilityForecast(){
   const rows=availForecast();
-  const nowB=rows.filter(r=>r.remaining===0||r.a<50);
-  const rest=rows.filter(r=>!(r.remaining===0||r.a<50));
+  const nowB=rows.filter(r=>r.remaining===0||r.a<capCfg().room);
+  const rest=rows.filter(r=>!(r.remaining===0||r.a<capCfg().room));
   const wk=rest.filter(r=>r.eta!=null&&r.eta<=7);
   const two=rest.filter(r=>r.eta!=null&&r.eta>7&&r.eta<=14);
   const later=rest.filter(r=>r.eta!=null&&r.eta>14);
@@ -1505,24 +1793,6 @@ function openDoneWeek(devId,i){
   var note=(expected!=null&&expected>rows.length)?'<div style="font-size:10px;color:var(--t3);padding:8px 8px 2px;line-height:1.5">Jira counted <b>'+expected+'</b> completed; <b>'+rows.length+'</b> are loaded here. Older tickets aren\'t stored locally.</div>':'';
   mxModal('Completed'+(d0?' \u00b7 '+d0.name:'')+' \u00b7 week of '+mxIso(s).slice(5),(expected!=null?expected:rows.length),note+body);
 }
-function mxHeatmap(){
-  var km=window.kanbanMetrics||{};var bd=km.byDev;
-  if(!bd)return '<div class="dash-empty">Sync from Jira to see completed work per engineer.</div>';
-  var wks=mxWeeks(),W=mxWip();
-  var rows=devs.map(function(d){var t=(bd[d.id]&&bd[d.id].thru)||[],arr=[];for(var i=0;i<8;i++)arr.push(+t[i]||0);return {d:d,arr:arr,tot:arr.reduce(function(a,b){return a+b;},0)};});
-  var act=rows.filter(function(r){return r.tot>0;}).sort(function(a,b){return b.tot-a.tot;}),idle=rows.filter(function(r){return r.tot===0;});
-  var max=1;act.forEach(function(r){r.arr.forEach(function(v){if(v>max)max=v;});});
-  var team=(km.thru||[]).slice(-8);var tmax=Math.max.apply(null,team.concat([1]));
-  var head='<tr><th class="l">Engineer</th>'+wks.map(function(s,i){return '<th onclick="openDoneWeek(\'\','+i+')" style="cursor:pointer;min-width:44px" title="All engineers \u2014 click for tickets">'+mxIso(s).slice(5).replace('-','/')+(i===7?'<div style="font-size:8px;font-weight:400">this wk</div>':'')+'</th>';}).join('')+'<th style="padding-left:10px">8 wks</th><th>Avg</th><th>In progress</th></tr>';
-  var cell=function(v,devId,i){var r=v/max;return '<td onclick="openDoneWeek(\''+devId+'\','+i+')" style="text-align:center;cursor:pointer"><div style="margin:2px;border-radius:5px;height:24px;line-height:24px;font-size:11px;font-family:var(--mono);background:'+(v?'rgba(22,163,74,'+(0.14+0.7*r).toFixed(2)+')':'var(--s2)')+';color:'+(r>0.6?'#fff':v?'var(--t)':'var(--t3)')+'">'+(v||'\u00b7')+'</div></td>';};
-  var teamRow=team.length?'<tr style="border-bottom:1px solid var(--bdr)"><td class="mx-n" onclick="openDoneWeek(\'\',7)" style="font-weight:600">Whole team</td>'+team.map(function(v,i){return '<td onclick="openDoneWeek(\'\','+i+')" style="text-align:center;cursor:pointer;vertical-align:bottom"><div style="margin:2px;height:24px;display:flex;align-items:flex-end;justify-content:center"><div style="width:100%;max-width:38px;background:var(--grn);opacity:.75;border-radius:3px 3px 0 0;height:'+Math.max(2,Math.round(v/tmax*22))+'px"></div></div><div style="font-size:9px;color:var(--t3);text-align:center;font-family:var(--mono)">'+v+'</div></td>';}).join('')+'<td style="text-align:center;font-family:var(--mono);font-size:11px;padding-left:10px">'+team.reduce(function(a,b){return a+b;},0)+'</td><td style="text-align:center;font-family:var(--mono);font-size:11px;color:var(--t3)">'+(Math.round(team.reduce(function(a,b){return a+b;},0)/8*10)/10)+'</td><td></td></tr>':'';
-  var body=act.map(function(r){
-    var g=W.byDev[r.d.id];var wip=g?('<span style="font-weight:600">'+g.fresh.length+'</span>'+(g.stale.length?' <span style="color:var(--t3);font-size:10px">+'+g.stale.length+' old</span>':'')):'<span style="color:var(--t3)">\u2014</span>';
-    return '<tr><td class="mx-n" onclick="flowToDev(\''+r.d.id+'\')" title="Open '+r.d.name+'">'+r.d.name+'</td>'+r.arr.map(function(v,i){return cell(v,r.d.id,i);}).join('')+'<td style="text-align:center;font-family:var(--mono);font-size:11px;padding-left:10px;font-weight:600">'+r.tot+'</td><td style="text-align:center;font-family:var(--mono);font-size:11px;color:var(--t3)">'+(Math.round(r.tot/8*10)/10)+'</td><td onclick="openWipDetail(\''+r.d.id+'\')" style="text-align:center;font-size:12px;cursor:pointer;white-space:nowrap;padding:0 6px">'+wip+'</td></tr>';
-  }).join('');
-  var idleNote=idle.length?'<div style="font-size:10px;color:var(--t3);margin-top:8px;line-height:1.5">No completed work in 8 weeks: '+idle.map(function(r){return r.d.name.split(' ')[0];}).join(', ')+'</div>':'';
-  return '<div style="overflow-x:auto"><table class="mx-tbl"><thead>'+head+'</thead><tbody>'+teamRow+body+'</tbody></table></div>'+idleNote;
-}
 function mxIso(ms){var d=new Date(ms);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function mxHistory(){try{return JSON.parse(localStorage.getItem('plt_thru_hist')||'{}');}catch(e){return {};}}
 function mxHistSave(){
@@ -1530,82 +1800,8 @@ function mxHistSave(){
   var H=mxHistory(),wks=mxWeeks(),team=km.thru.slice(-8),off=8-team.length;
   team.forEach(function(v,i){var key=mxIso(wks[off+i]);var r=H[key]||(H[key]={t:0,d:{}});r.t=+v||0;});
   if(km.byDev)Object.keys(km.byDev).forEach(function(id){var a=((km.byDev[id]||{}).thru||[]).slice(-8),o=8-a.length;a.forEach(function(v,i){var key=mxIso(wks[o+i]);var r=H[key]||(H[key]={t:0,d:{}});r.d[id]=+v||0;});});
-  var keys=Object.keys(H).sort();if(keys.length>200)keys.slice(0,keys.length-200).forEach(function(k){delete H[k];});
+  var keys=Object.keys(H).sort();if(keys.length>20)keys.slice(0,keys.length-20).forEach(function(k){delete H[k];});
   try{localStorage.setItem('plt_thru_hist',JSON.stringify(H));}catch(e){}
-}
-function mxTrendCfg(){
-  var d={period:'week',periods:8,by:'team',partial:true};
-  try{var c=JSON.parse(localStorage.getItem('plt_trend_cfg')||'{}');if(c.period==='week'||c.period==='biweek'||c.period==='month')d.period=c.period;if(c.by==='team'||c.by==='engineer')d.by=c.by;if(+c.periods>=2)d.periods=Math.min(52,Math.round(+c.periods));if(typeof c.partial==='boolean')d.partial=c.partial;}catch(e){}
-  return d;
-}
-function setTrend(k,v){
-  var c=mxTrendCfg();c[k]=v;
-  if(k==='period')c.periods={week:8,biweek:6,month:6}[v];
-  try{localStorage.setItem('plt_trend_cfg',JSON.stringify(c));}catch(e){}
-  renderMetricsView();
-}
-function toggleTrendSettings(){window._trSet=!window._trSet;renderMetricsView();}
-function mxBuckets(cfg){
-  var H=mxHistory(),keys=Object.keys(H).sort();if(!keys.length)return [];
-  var WK=7*864e5,curKey=mxIso(mxWeeks()[7]),curMs=Date.parse(curKey+'T00:00:00');
-  var out=[],map={};
-  keys.forEach(function(k){
-    var w=H[k],ms=Date.parse(k+'T00:00:00'),n=Math.round((ms-curMs)/WK),id;
-    if(cfg.period==='week')id=k;else if(cfg.period==='biweek')id='b'+Math.floor((-n)/2);else id=k.slice(0,7);
-    var b=map[id];if(!b){b=map[id]={id:id,start:k,total:0,byDev:{},weeks:0,partial:false};out.push(b);}
-    b.total+=(w.t||0);b.weeks++;if(k<b.start)b.start=k;if(k===curKey)b.partial=true;
-    Object.keys(w.d||{}).forEach(function(did){b.byDev[did]=(b.byDev[did]||0)+w.d[did];});
-  });
-  out.sort(function(a,b){return a.start<b.start?-1:1;});
-  var mo=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  out.forEach(function(b){
-    if(cfg.period==='month'){b.label=mo[+b.start.slice(5,7)-1];b.sub=b.start.slice(0,4)!==curKey.slice(0,4)?b.start.slice(0,4):'';}
-    else if(cfg.period==='biweek'){b.label=b.start.slice(5).replace('-','/');b.sub=b.weeks+' wk'+(b.weeks>1?'s':'');}
-    else{b.label=b.start.slice(5).replace('-','/');b.sub='';}
-  });
-  if(!cfg.partial)out=out.filter(function(b){return !b.partial;});
-  return out.slice(-cfg.periods);
-}
-function openTrendBucket(i){
-  var cfg=mxTrendCfg(),B=mxBuckets(cfg),b=B[i];if(!b)return;
-  var ids=Object.keys(b.byDev).filter(function(id){return b.byDev[id]>0;}).sort(function(x,y){return b.byDev[y]-b.byDev[x];});
-  var sum=ids.reduce(function(a,id){return a+b.byDev[id];},0),max=Math.max(1,b.byDev[ids[0]]||1),other=Math.max(0,b.total-sum);
-  var row=function(name,n,col,click){return '<div'+(click?' onclick="'+click+'"':'')+' style="display:flex;align-items:center;gap:10px;padding:7px 8px;border-bottom:1px solid var(--bdr);'+(click?'cursor:pointer':'')+'"><span style="width:150px;font-size:12px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+name+'</span><div style="flex:1;height:10px;background:var(--s2);border-radius:99px;overflow:hidden"><div style="height:100%;width:'+Math.round(n/max*100)+'%;background:'+col+'"></div></div><span style="font-family:var(--mono);font-size:12px;width:34px;text-align:right">'+n+'</span></div>';};
-  var rows=ids.map(function(id){var d=devs.find(function(x){return x.id===id;});return row(d?d.name:id,b.byDev[id],'var(--grn)',d?'closeModal();flowToDev(\''+id+'\')':'');}).join('')+(other>0?row('Other / unmatched',other,'var(--t3)',''):'');
-  var span=cfg.period==='month'?b.label+(b.sub?' '+b.sub:''):'week'+(b.weeks>1?'s':'')+' of '+b.start.slice(5);
-  mxModal('Completed \u00b7 '+span,b.total,(b.partial?'<div style="font-size:10px;color:var(--t3);padding:6px 8px">Current period \u2014 still in progress.</div>':'')+(rows||'<div style="font-size:12px;color:var(--t3);padding:10px">No per-engineer data.</div>'));
-}
-function mxTrendCard(){
-  var cfg=mxTrendCfg(),B=mxBuckets(cfg);
-  var seg=function(k,label){return '<button class="fb'+(cfg.period===k?' on':'')+'" onclick="setTrend(\'period\',\''+k+'\')">'+label+'</button>';};
-  var head='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px"><div class="chart-title" style="margin:0;flex:1;min-width:160px">Trends \u00b7 completed issues</div><span style="display:inline-flex;gap:4px">'+seg('week','Weekly')+seg('biweek','Bi-weekly')+seg('month','Monthly')+'</span><button class="fb'+(window._trSet?' on':'')+'" onclick="toggleTrendSettings()" title="Trend settings">\u2699 Settings</button></div>';
-  var settings=window._trSet?'<div style="display:flex;gap:18px;flex-wrap:wrap;align-items:center;padding:10px 12px;background:var(--s2);border-radius:var(--r);margin-bottom:12px;font-size:12px"><label style="display:flex;align-items:center;gap:6px">Periods to show <input type="number" min="2" max="52" value="'+cfg.periods+'" style="width:56px" onchange="setTrend(\'periods\',Math.max(2,Math.min(52,Math.round(+this.value||8))))"></label><span style="display:inline-flex;align-items:center;gap:6px">Break down by <button class="fb'+(cfg.by==='team'?' on':'')+'" onclick="setTrend(\'by\',\'team\')">Team total</button><button class="fb'+(cfg.by==='engineer'?' on':'')+'" onclick="setTrend(\'by\',\'engineer\')">By engineer</button></span><label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" '+(cfg.partial?'checked':'')+' onchange="setTrend(\'partial\',this.checked)"> Include current (partial) period</label></div>':'';
-  if(!B.length)return '<div class="chart-card" id="mx-trend">'+head+settings+'<div class="dash-empty">Sync from Jira to start collecting trend history.</div></div>';
-  var max=Math.max.apply(null,B.map(function(b){return b.total;}).concat([1]));
-  var top=[],colorOf={};
-  if(cfg.by==='engineer'){
-    var tot={};B.forEach(function(b){Object.keys(b.byDev).forEach(function(id){tot[id]=(tot[id]||0)+b.byDev[id];});});
-    top=Object.keys(tot).sort(function(a,b){return tot[b]-tot[a];}).slice(0,8);
-    top.forEach(function(id){var d=devs.find(function(x){return x.id===id;});colorOf[id]=d?gc(d.colorIdx).t:'var(--t3)';});
-  }
-  var H=120;
-  var cols=B.map(function(b,i){
-    var inner;
-    if(cfg.by==='engineer'){
-      var used=0,segs=top.map(function(id){var v=b.byDev[id]||0;used+=v;return v>0?'<div title="'+((devs.find(function(x){return x.id===id;})||{name:id}).name)+': '+v+'" style="height:'+Math.max(1,Math.round(v/max*H))+'px;background:'+colorOf[id]+'"></div>':'';}).join('');
-      var rest=Math.max(0,b.total-used);if(rest>0)segs='<div title="Others: '+rest+'" style="height:'+Math.max(1,Math.round(rest/max*H))+'px;background:var(--bdr2)"></div>'+segs;
-      inner='<div style="display:flex;flex-direction:column;justify-content:flex-end;width:100%;max-width:56px;margin:0 auto;border-radius:3px 3px 0 0;overflow:hidden;height:'+H+'px'+(b.partial?';opacity:.65':'')+'">'+segs+'</div>';
-    }else{
-      inner='<div style="display:flex;align-items:flex-end;height:'+H+'px"><div style="width:100%;max-width:56px;margin:0 auto;background:var(--grn);border-radius:3px 3px 0 0;height:'+Math.max(2,Math.round(b.total/max*H))+'px'+(b.partial?';opacity:.55':'')+'"></div></div>';
-    }
-    return '<div onclick="openTrendBucket('+i+')" title="Click for per-engineer breakdown" style="flex:1;min-width:0;cursor:pointer"><div style="text-align:center;font-family:var(--mono);font-size:11px;margin-bottom:3px;color:'+(b.partial?'var(--t3)':'var(--t)')+'">'+b.total+'</div>'+inner+'<div style="text-align:center;font-size:10px;color:var(--t3);margin-top:5px">'+b.label+'</div><div style="text-align:center;font-size:9px;color:var(--t3);min-height:11px">'+(b.partial?'so far':b.sub)+'</div></div>';
-  }).join('');
-  var legend=cfg.by==='engineer'?'<div style="display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:10px;font-size:10px;color:var(--t2)">'+top.map(function(id){var d=devs.find(function(x){return x.id===id;});return '<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:'+colorOf[id]+'"></span>'+(d?d.name.split(' ')[0]:id)+'</span>';}).join('')+'<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:var(--bdr2)"></span>Others</span></div>':'';
-  var full=B.filter(function(b){return !b.partial;}),delta='';
-  if(full.length>=2){var a=full[full.length-1].total,p=full[full.length-2].total;if(p>0){var pc=Math.round((a-p)/p*100);delta='<span style="color:'+(pc>0?'var(--grn)':pc<0?'var(--red)':'var(--t2)')+'">'+(pc>0?'\u2191 ':pc<0?'\u2193 ':'\u2192 ')+Math.abs(pc)+'%</span> last full period vs the one before \u00b7 ';}}
-  var nW=Object.keys(mxHistory()).length;
-  var foot='<div style="font-size:10px;color:var(--t3);margin-top:8px">'+delta+nW+' weeks of history stored \u2014 it grows each time you sync, so monthly trends fill out over time.</div>';
-  return '<div class="chart-card" id="mx-trend" style="margin-bottom:12px">'+head+settings+'<div style="display:flex;gap:6px;align-items:flex-end">'+cols+'</div>'+legend+foot+'</div>';
 }
 function openFlowEff(){
   var km=window.kanbanMetrics||{},bd=km.byDev||{};
@@ -1616,6 +1812,7 @@ function openFlowEff(){
 }
 function renderMetricsView(){
   const el=document.getElementById('flow-view');if(!el)return;
+  setTimeout(function(){velInit('m');},0);
   const km=window.kanbanMetrics||{};
   try{mxHistSave();}catch(e){}
   const effCol=km.flowEff==null?'var(--t3)':(km.flowEff>=40?'var(--grn)':km.flowEff>=25?'var(--amb)':'var(--red)');
@@ -1630,15 +1827,15 @@ function renderMetricsView(){
   const tiles='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">'+
     tile(W.fresh,'In progress','touched in last 30d'+(W.stale?' \u00b7 '+W.stale+' older hidden':''),'var(--acc)','window._wipAll=false;openWipDetail(\'\')')+
     tile(cur==null?'\u2014':cur,'Completed this week',priorAvg!=null?'avg '+priorAvg+'/wk before':'','var(--grn)','openDoneWeek(\'\',7)')+
-    tile(d1(km.thruAvg),'Completed / week','8-week average, whole team','var(--grn)','document.getElementById(\'mx-heat\').scrollIntoView({behavior:\'smooth\',block:\'start\'})')+
+    tile(d1(km.thruAvg),'Completed / week','8-week average, whole team','var(--grn)','document.getElementById(\'mx-vel\').scrollIntoView({behavior:\'smooth\',block:\'start\'})')+
     tile(km.cycleP50!=null?d1(km.cycleP50)+'d':'\u2014','Cycle time \u00b7 median','85th percentile '+d1(km.cycleP85)+'d','var(--blu)')+
     tile(km.flowEff==null?'\u2014':km.flowEff+'%','Flow efficiency','active work \u00f7 total cycle \u00b7 status-based',effCol,'openFlowEff()')+
   '</div>';
   el.innerHTML='<div style="max-width:1100px;margin:0 auto;padding:20px 24px">'+
     '<div style="font-size:18px;font-weight:700;margin-bottom:2px">Team metrics</div>'+
     '<div style="font-size:11px;color:var(--t3);margin-bottom:16px">'+(km.asOf?'as of '+km.asOf:'sync from Jira to populate')+'</div>'+
-    summary+tiles+mxTrendCard()+
-    '<div class="chart-card" id="mx-heat"><div class="chart-title">Completed per week, by engineer <span class="chart-sub">click a number for the tickets \u00b7 click a name for their page</span></div>'+mxHeatmap()+'</div>'+
+    summary+tiles+
+    '<div class="chart-card" id="mx-vel" style="margin-bottom:12px"><div id="vel-m"></div></div>'+
     '<div style="font-size:10px;color:var(--t3);margin-top:10px;line-height:1.5">Completed counts come from Jira resolution dates. \u201cIn progress\u201d counts only tickets touched in the last 30 days; older ones are tucked away under \u201cinclude older\u201d.</div>'+
   '</div>';
 }
@@ -1747,8 +1944,8 @@ function openCapacityDetail(){
   const onLoad=on.length?Math.round(on.reduce((s,d)=>s+alloc(d.id),0)/on.reduce((s,d)=>s+(d.capacity||100),0)*100):0;
   const offLoad=off.length?Math.round(off.reduce((s,d)=>s+alloc(d.id),0)/off.reduce((s,d)=>s+(d.capacity||100),0)*100):0;
   // by workstream
-  const load={};WS_ORDER.forEach(ws=>load[ws]=0);projects.filter(p=>!p.archived).forEach(p=>{const ws=p.workstream||'Unassigned';(assignments[p.id]||[]).forEach(a=>{load[ws]=(load[ws]||0)+a.pct;});});
-  const wsRows=WS_ORDER.filter(ws=>load[ws]>0).sort((a,b)=>load[b]-load[a]);
+  const load={};wsAll().forEach(ws=>load[ws]=0);projects.filter(p=>!p.archived).forEach(p=>{const ws=p.workstream||'Unassigned';(assignments[p.id]||[]).forEach(a=>{load[ws]=(load[ws]||0)+a.pct;});});
+  const wsRows=wsAll().filter(ws=>load[ws]>0).sort((a,b)=>load[b]-load[a]);
   const maxWs=Math.max.apply(null,wsRows.map(ws=>load[ws])||[1]);
   const wsHTML=wsRows.map(ws=>{const c=wsCol(ws);return '<div onclick="closeModal();openWorkstreamDetail(\''+ws+'\')" style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer"><span style="width:78px;font-size:11px;color:'+c+';flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+ws+'</span><div style="flex:1;height:6px;background:var(--s2);border-radius:99px;overflow:hidden"><div style="height:100%;width:'+Math.round(load[ws]/maxWs*100)+'%;background:'+c+';border-radius:99px"></div></div><span style="font-size:10px;font-family:var(--mono);color:var(--t2);width:70px;text-align:right">'+load[ws]+'% · '+(Math.round(load[ws]/100*10)/10)+'FTE</span></div>';}).join('');
   const prev=(function(){try{const a=JSON.parse(localStorage.getItem('plt_trend')||'[]');return a.length?a[a.length-1]:null;}catch(e){return null;}})();
@@ -1869,7 +2066,7 @@ function capScore(d){
   projects.forEach(function(p){if(p.archived)return;(assignments[p.id]||[]).forEach(function(a){if(a.devId!==d.id)return;if(a.src==='jira')mapped+=a.pct*anchor/100;if(p.status==='done')return;if(a.src==='plan')plan+=a.pct;else proj+=a.pct;});});
   var other=0,otherSrc='est';
   if(window.engOther){var eo=window.engOther[d.id];other=((eo&&eo.w)||0)/anchor*100;otherSrc='jira';}
-  else{var tk=((window.engTickets||{})[d.id]||{}).tickets||[];var tot=0,inf=0;tk.forEach(function(x){var w=(x.p>0?x.p:3)*tkStateWeight(x.st);tot+=w;var c=tkCat(x.st);if(c==='active'||c==='qa'||c==='blocked')inf+=w;});other=tot>0?inf*Math.max(0,(tot-mapped)/tot)/anchor*100:0;}
+  else{var tk=((window.engTickets||{})[d.id]||{}).tickets||[];var tot=0,inf=0;tk.forEach(function(x){var w=(x.p>0?x.p:3)*tkStateWeight(x.st);tot+=w;var c=tkCat(x.st);if((c==='active'||c==='qa'||c==='blocked')&&tkFresh(x))inf+=w;});other=tot>0?inf*Math.max(0,(tot-mapped)/tot)/anchor*100:0;}
   var g=(window.ghData||{})[d.id],prs=g?(g.openPRs||0):0,prPct=Math.min(cfg.prCap,prs*cfg.pr);
   var total=(proj+plan+other+prPct)/frac;
   var L=devLoad(d.id),hoursKnown=!!window.engRecentWork&&Object.keys(window.engRecentWork).length>0;
@@ -1908,14 +2105,14 @@ function headcountByWorkstream(){
   var byWs={};
   projects.filter(p=>!p.archived&&p.status!=='done').forEach(function(p){var ws=p.workstream||'Unassigned';(assignments[p.id]||[]).forEach(function(a){byWs[ws]=byWs[ws]||{};byWs[ws][a.devId]=1;});});
   var items=Object.keys(byWs).map(function(ws){return {ws:ws,n:Object.keys(byWs[ws]).length,c:wsCol(ws)};}).filter(x=>x.n>0).sort((a,b)=>b.n-a.n);
-  var _u={};Object.keys(byWs).forEach(function(w){Object.keys(byWs[w]).forEach(function(k){_u[k]=1;});});var uniq=Object.keys(_u).length;var free=devs.filter(function(d){return devLoad(d.id).n<=1;}).length;
+  var _u={};Object.keys(byWs).forEach(function(w){Object.keys(byWs[w]).forEach(function(k){_u[k]=1;});});var uniq=Object.keys(_u).length;var free=availForecast().filter(function(r){return r.remaining===0||r.a<capCfg().room||(r.eta!=null&&r.eta<=7);}).length;
   if(!items.length)return '<div class="dash-empty">No one staffed yet — sync from Jira.</div>';
   var total=items.reduce(function(s,i){return s+i.n;},0);var off=0,segs='';
   items.forEach(function(it){var frac=it.n/total*100;segs+='<circle cx="21" cy="21" r="15.915" fill="transparent" stroke="'+it.c+'" stroke-width="6" stroke-dasharray="'+frac.toFixed(2)+' '+(100-frac).toFixed(2)+'" stroke-dashoffset="'+(-off).toFixed(2)+'" style="cursor:pointer" onclick="openWorkstreamDetail(\''+it.ws.replace(/\x27/g,"")+'\')"><title>'+it.ws+': '+it.n+'</title></circle>';off+=frac;});
   var legend=items.map(function(it){return '<div onclick="openWorkstreamDetail(\''+it.ws.replace(/\x27/g,"")+'\')" style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;padding:2px 0"><span style="width:9px;height:9px;border-radius:2px;background:'+it.c+';flex-shrink:0"></span><span style="flex:1;color:var(--t2)">'+it.ws+'</span><span style="font-family:var(--mono);color:var(--t3)">'+it.n+'</span></div>';}).join('');
   return '<div style="display:flex;align-items:center;gap:18px"><div style="position:relative;width:112px;height:112px;flex-shrink:0"><svg viewBox="0 0 42 42" width="112" height="112" style="transform:rotate(-90deg)">'+segs+'</svg><div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none"><div style="font-size:22px;font-weight:600;line-height:1">'+uniq+'</div><div style="font-size:10px;color:var(--t3);margin-top:2px">people</div></div></div><div style="flex:1;min-width:0">'+legend+'</div></div><div onclick="openAvailabilityForecast()" style="cursor:pointer;display:flex;justify-content:space-between;font-size:12px;padding-top:10px;margin-top:8px;border-top:1px solid var(--bdr);color:var(--grn)"><span>Freeing up soon \u2192</span><span style="font-family:var(--mono)">'+free+'</span></div>';
 }
-function devLoad(devId){var t=((window.engTickets||{})[devId]||{}).tickets||[];var n=t.filter(function(x){var cc=tkCat(x.st);return cc==='active'||cc==='qa'||cc==='blocked';}).length;var rw=(window.engRecentWork||{})[devId]||{};var h=Object.keys(rw).reduce(function(s,k){return s+(rw[k].hrs||0);},0);return {n:n,h:Math.round(h)};}
+function devLoad(devId){var t=((window.engTickets||{})[devId]||{}).tickets||[];var n=t.filter(function(x){var cc=tkCat(x.st);return (cc==='active'||cc==='qa'||cc==='blocked')&&tkFresh(x);}).length;var rw=(window.engRecentWork||{})[devId]||{};var h=Object.keys(rw).reduce(function(s,k){return s+(rw[k].hrs||0);},0);return {n:n,h:Math.round(h)};}
 function attnGo(kind,id){if(kind==='dev'){flowToDev(id);}else{setView('board');setTimeout(function(){selProject(id);},80);}}
 function dismissAttn(pid){const p=projects.find(x=>x.id===pid);if(!p)return;p.attnHide=true;save();if(view==='overview')renderOverview();showToast('Snoozed from attention','info');}
 function clearAttnHide(){projects.forEach(p=>{if(p.attnHide)delete p.attnHide;});save();if(view==='overview')renderOverview();}
@@ -2027,9 +2224,10 @@ function renderOverviewInner(el){
   const chips='<span class="rag-filter" style="margin-left:0">'+[['all','All '+(flagged.length+rest.length)],['attn','Needs attention '+hc]].map(function(f){return '<button class="rag-fbtn'+(hf===f[0]?' on':'')+'" onclick="setOvHF(\''+f[0]+'\')">'+f[1]+'</button>';}).join('')+'</span>';
   const snoozed=HD.hidden?'<span style="cursor:pointer;color:var(--acc);font-size:11px" onclick="clearAttnHide()">'+HD.hidden+' snoozed \u00b7 show all</span>':'';
   const projTable=tableRows.length?'<div class="ov-tblwrap"><table class="ov-tbl"><thead><tr><th>Project</th><th>Workstream</th><th>Health</th><th>Team</th><th>Due</th></tr></thead><tbody>'+tableRows.map(projRow).join('')+'</tbody></table></div>':'<div class="dash-empty">No projects to show. Star a project to pin it here.</div>';
-  const projectsBlock='<div class="ov-block">'+H('Projects<span class="ov-count">'+(flagged.length+rest.length)+'</span>','<span class="ov-links">'+snoozed+chips+'</span>')+healthBar+projTable+'</div>';
+  const nw=epicsNoWs();const missNote=(!execMode&&nw.length)?'<div style="font-size:11px;color:var(--t3);margin-top:8px">\u26a0 '+nw.length+' PLT epic'+(nw.length>1?'s':'')+' not shown \u2014 no Workstream set in Jira. <a style="color:var(--acc);cursor:pointer" onclick="openMissingWs()">See which \u2192</a></div>':'';
+  const projectsBlock='<div class="ov-block">'+H('Projects<span class="ov-count">'+(flagged.length+rest.length)+'</span>','<span class="ov-links">'+snoozed+chips+'</span>')+healthBar+projTable+missNote+'</div>';
 
-  const peopleBlock='<div class="ov-block">'+H('People &amp; capacity','<span class="ov-count" style="margin-left:0">people on active projects, by workstream</span>')+'<div class="dash-panel ov-cap2"><div>'+headcountByWorkstream()+'</div><div><div style="font-size:11px;color:var(--t3);margin-bottom:8px">Team capacity \u00b7 click a bucket</div>'+bandwidthSplit()+'</div></div></div>';
+  const peopleBlock='<div class="ov-block">'+H('People &amp; capacity','<span class="ov-links"><span class="ov-count" style="margin-left:0">people on active projects, by workstream</span><a onclick="openOffshore()">Offshore teams \u2192</a></span>')+'<div class="dash-panel ov-cap2"><div>'+headcountByWorkstream()+'</div><div><div style="font-size:11px;color:var(--t3);margin-bottom:8px">Team capacity \u00b7 click a bucket</div>'+bandwidthSplit()+'</div></div></div>';
 
   const quiet=[];
   if(niEmpty)quiet.push('No new or planned projects');
@@ -2076,7 +2274,7 @@ function deleteInitiative(id){initiatives=initiatives.filter(x=>x.id!==id);save(
 
 function renderHeat(){
   const el=document.getElementById('heat');if(!el)return;
-  const wsList=WS_ORDER.filter(ws=>projects.some(p=>!p.archived&&(p.workstream||'Unassigned')===ws));
+  const wsList=wsAll().filter(ws=>projects.some(p=>!p.archived&&(p.workstream||'Unassigned')===ws));
   const rows=devs.map(dev=>{const cells=wsList.map(ws=>{const wsProjs=projects.filter(p=>!p.archived&&(p.workstream||'Unassigned')===ws);const tot=wsProjs.reduce((s,p)=>{const a=(assignments[p.id]||[]).find(x=>x.devId===dev.id);return s+(a?a.pct:0);},0);const bg=tot===0?'var(--s2)':tot<50?'#DBEAFE':tot<100?'#FEF3C7':'#FEE2E2';const tc=tot===0?'var(--t3)':tot<50?'#1E40AF':tot<100?'#92400E':'#991B1B';return '<td class="hm-cell" style="background:'+bg+';color:'+tc+'">'+(tot?tot+'%':'')+'</td>';}).join('');return '<tr><td class="hm-dev">'+dev.name.split(' ')[0]+'</td>'+cells+'</tr>';}).join('');
   el.innerHTML='<div class="heatmap-wrap"><table class="hm-table"><thead><tr><th></th>'+wsList.map(ws=>'<th class="hm-th" style="color:'+wsCol(ws)+'">'+ws+'</th>').join('')+'</tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
@@ -2138,7 +2336,7 @@ function openSettings(tab){
   document.getElementById('mc').innerHTML='<div class="backdrop" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:400px"><div class="mh"><div class="mt">⚙️ Settings</div><button class="ib" onclick="closeModal()"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="1" y1="1" x2="11" y2="11"/><line x1="11" y1="1" x2="1" y2="11"/></svg></button></div><div style="display:flex;border-bottom:1px solid var(--bdr);padding:0 14px"><button class="vs-btn'+(tab==='api'?' on':'')+'" onclick="openSettings(\'api\')" style="padding:8px 12px;border-right:none">Anthropic</button><button class="vs-btn'+(tab==='jira'?' on':'')+'" onclick="openSettings(\'jira\')" style="padding:8px 12px;border-right:none">Jira</button><button class="vs-btn'+(tab==='github'?' on':'')+'" onclick="openSettings(\'github\')" style="padding:8px 12px;border-right:none">GitHub</button><button class="vs-btn'+(tab==='capacity'?' on':'')+'" onclick="openSettings(\'capacity\')" style="padding:8px 12px">Capacity</button></div>'+
     (tab==='api'?'<div class="mb"><div class="field"><label>Anthropic API Key</label><input id="anth-key" type="password" value="'+anthropicKey+'" placeholder="sk-ant-…" autocomplete="off"><div style="font-size:10px;color:var(--t2);margin-top:3px">For AI Insights refresh. Stored locally only.</div></div><div style="font-size:11px;color:var(--t2);padding:8px 10px;background:var(--s2);border-radius:var(--r)">Get at <strong>console.anthropic.com</strong> → API Keys. ~$0.01/run.</div></div><div class="mf"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-p" onclick="saveAnthropicKey()">Save</button></div>':
     tab==='capacity'?capSettingsHTML():
-    tab==='jira'?'<div class="mb"><div style="font-size:11px;color:var(--t2);padding:8px 10px;background:var(--s2);border-radius:var(--r);margin-bottom:10px">Recommended: deploy the proxy, set <code>JIRA_EMAIL</code> + <code>JIRA_TOKEN</code> as Vercel env vars, and set the Proxy URL below. Then you can leave the token & email fields blank — your token stays off the browser.</div><div class="field"><label>Jira API Token <span style="font-weight:400;color:var(--t3)">(optional if using proxy env vars)</span></label><input id="jira-tok" type="password" value="'+jiraToken+'" placeholder="ATATT3x… or blank" autocomplete="off"></div><div class="field"><label>Jira Email <span style="font-weight:400;color:var(--t3)">(optional if using proxy env vars)</span></label><input id="jira-email" type="email" value="'+jiraEmail+'" placeholder="you@centerfield.com or blank"></div><div class="field"><label>Proxy URL <span style="font-weight:400;color:var(--t3)">(required — Jira blocks direct browser calls)</span></label><input id="jira-proxy" value="'+jiraProxy+'" placeholder="/api/jira"><div style="font-size:10px;color:var(--t2);margin-top:3px">Deploy <code>api/jira.js</code> alongside this app, then set this to <code>/api/jira</code>.</div></div><label style="display:flex;align-items:center;gap:8px;font-size:12px;margin-top:4px;cursor:pointer"><input type="checkbox" id="jira-autosync" '+(localStorage.getItem('plt_autosync')==='0'?'':'checked')+' onchange="localStorage.setItem(\'plt_autosync\',this.checked?\'1\':\'0\')"> Auto-sync from Jira when the app opens <span style="color:var(--t3)">(quietly, every 15 min max)</span></label><label style="display:flex;align-items:center;gap:8px;font-size:12px;margin-top:8px;cursor:pointer"><input type="checkbox" id="jira-autoadd" '+(localStorage.getItem('plt_autoadd')==='0'?'':'checked')+' onchange="localStorage.setItem(\'plt_autoadd\',this.checked?\'1\':\'0\')"> Auto-add new epics from Jira as projects <span style="color:var(--t3)">(only epics with work in progress by your engineers)</span></label><div style="margin-top:12px"><label style="font-size:12px;display:block;margin-bottom:4px">Full plate = <b id="anchor-val">\'+(+(localStorage.getItem(\'plt_alloc_anchor\')||14)||14)+\'</b> pts <span style="color:var(--t3)">(calibrates capacity %)</span></label><input type="range" min="6" max="40" value="\'+(+(localStorage.getItem(\'plt_alloc_anchor\')||14)||14)+\'" style="width:100%" oninput="document.getElementById(\\\'anchor-val\\\').textContent=this.value" onchange="setAnchor(this.value)"><div style="font-size:10px;color:var(--t3);margin-top:2px">Higher = bars read lower. Raise it if everyone looks over-capacity.</div></div></div><div class="mf"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-p" onclick="saveJiraToken()">Save & Sync</button></div>':
+    tab==='jira'?'<div class="mb"><div style="font-size:11px;color:var(--t2);padding:8px 10px;background:var(--s2);border-radius:var(--r);margin-bottom:10px">Recommended: deploy the proxy, set <code>JIRA_EMAIL</code> + <code>JIRA_TOKEN</code> as Vercel env vars, and set the Proxy URL below. Then you can leave the token & email fields blank — your token stays off the browser.</div><div class="field"><label>Jira API Token <span style="font-weight:400;color:var(--t3)">(optional if using proxy env vars)</span></label><input id="jira-tok" type="password" value="'+jiraToken+'" placeholder="ATATT3x… or blank" autocomplete="off"></div><div class="field"><label>Jira Email <span style="font-weight:400;color:var(--t3)">(optional if using proxy env vars)</span></label><input id="jira-email" type="email" value="'+jiraEmail+'" placeholder="you@centerfield.com or blank"></div><div class="field"><label>Proxy URL <span style="font-weight:400;color:var(--t3)">(required — Jira blocks direct browser calls)</span></label><input id="jira-proxy" value="'+jiraProxy+'" placeholder="/api/jira"><div style="font-size:10px;color:var(--t2);margin-top:3px">Deploy <code>api/jira.js</code> alongside this app, then set this to <code>/api/jira</code>.</div></div><label style="display:flex;align-items:center;gap:8px;font-size:12px;margin-top:4px;cursor:pointer"><input type="checkbox" id="jira-autosync" '+(localStorage.getItem('plt_autosync')==='0'?'':'checked')+' onchange="localStorage.setItem(\'plt_autosync\',this.checked?\'1\':\'0\')"> Auto-sync from Jira when the app opens <span style="color:var(--t3)">(quietly, every 15 min max)</span></label><label style="display:flex;align-items:center;gap:8px;font-size:12px;margin-top:8px;cursor:pointer"><input type="checkbox" id="jira-autoadd" '+(localStorage.getItem('plt_autoadd')==='0'?'':'checked')+' onchange="localStorage.setItem(\'plt_autoadd\',this.checked?\'1\':\'0\')"> Auto-add PLT epics from Jira <span style="color:var(--t3)">(open epics that have a Workstream set)</span></label><div style="margin-top:12px"><label style="font-size:12px;display:block;margin-bottom:4px">Full plate = <b id="anchor-val">\'+(+(localStorage.getItem(\'plt_alloc_anchor\')||14)||14)+\'</b> pts <span style="color:var(--t3)">(calibrates capacity %)</span></label><input type="range" min="6" max="40" value="\'+(+(localStorage.getItem(\'plt_alloc_anchor\')||14)||14)+\'" style="width:100%" oninput="document.getElementById(\\\'anchor-val\\\').textContent=this.value" onchange="setAnchor(this.value)"><div style="font-size:10px;color:var(--t3);margin-top:2px">Higher = bars read lower. Raise it if everyone looks over-capacity.</div></div></div><div class="mf"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-p" onclick="saveJiraToken()">Save & Sync</button></div>':
     '<div class="mb"><div class="field"><label>GitHub Personal Access Token</label><input id="gh-tok" type="password" value="'+ghToken+'" placeholder="ghp_…" autocomplete="off"><div style="font-size:10px;color:var(--t2);margin-top:3px">Needs <code>repo</code> + <code>read:org</code> scope.</div></div><div class="field"><label>Organization (slug)</label><input id="gh-org" value="'+ghOrg+'" placeholder="e.g. centerfieldmedia" autocomplete="off"><div style="font-size:10px;color:var(--t2);margin-top:3px">The exact org name from your GitHub URL: github.com/orgs/<b>&lt;this&gt;</b>. A 404 on sync usually means this is wrong.</div></div><div class="field"><label>Login Map (Name = github-login)</label><textarea id="gh-logins" style="width:100%;padding:6px 8px;border:1px solid var(--bdr);border-radius:var(--r);font-size:11px;font-family:var(--mono);min-height:160px;resize:vertical">'+ghLoginMap+'</textarea></div></div><div class="mf"><button class="btn" onclick="closeModal()">Cancel</button>'+(window.ghMatchReport?'<button class="btn" onclick="openGhMatchReport()" style="margin-right:auto">Match report</button>':'')+'<button class="btn btn-p" onclick="saveGhToken()">Save & Sync</button></div>')+
     '<div style="display:flex;align-items:center;gap:8px;padding:9px 16px;border-top:1px solid var(--bdr);background:var(--s2)"><span style="font-size:10px;color:var(--t2);flex:1">Keys don\'t carry to a new download. Back them up once, restore into any build.</span><button class="btn" style="font-size:10px;padding:4px 8px" onclick="backupSettings()">↓ Backup</button><button class="btn" style="font-size:10px;padding:4px 8px" onclick="document.getElementById(\'settings-restore\').click()">↑ Restore</button><input type="file" id="settings-restore" accept="application/json,.json" style="display:none" onchange="restoreSettings(event)"></div>'+'</div></div>';
 }
@@ -2318,6 +2516,71 @@ async function syncAllFromJira(){
   const foot=document.getElementById('jsp-foot');
   document.getElementById('mc').innerHTML='<div class="backdrop" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:400px"><div class="mh"><div class="mt">'+(errors.length?(ok?'Partly synced':'Sync failed'):'Refreshed ✓')+'</div><button class="ib" onclick="closeModal()"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="1" y1="1" x2="11" y2="11"/><line x1="11" y1="1" x2="1" y2="11"/></svg></button></div><div style="padding:14px 18px">'+steps.map((s,i)=>'<div style="display:flex;align-items:center;gap:9px;padding:5px 0;font-size:12px"><span style="width:14px;text-align:center">'+(st[i]==='done'?'<span style="color:var(--grn)">✓</span>':'<span style="color:var(--red)">✕</span>')+'</span><span>'+s[0]+'</span>'+(st[i]==='done'&&st[i+'r']?'<span style="margin-left:auto;font-size:10px;color:var(--t2)">'+st[i+'r']+'</span>':'')+'</div>').join('')+(errors.length?'<div style="font-size:11px;color:var(--amb);margin-top:10px;line-height:1.5">'+errors.join('<br>')+'</div><div style="font-size:10px;color:var(--t3);margin-top:8px">If everything failed, Jira Cloud is likely blocking the browser (CORS).</div>':'<div style="font-size:11px;color:var(--t2);margin-top:10px">Dates, status, and staffing now mirror Jira.</div>')+'</div><div class="mf"><button class="btn btn-p" onclick="closeModal()">Done</button></div></div></div>';
 }
+async function jiraWorkstreamField(headers){
+  var f=localStorage.getItem('plt_jira_ws_field')||'';
+  if(f==='__none__')return '';
+  if(f)return f;
+  try{
+    var fr=await jFetch(JIRA+'/rest/api/3/field',{headers:headers});
+    if(fr.ok){var flds=await fr.json();var m=flds.find(function(x){return /^work ?stream$/i.test((x.name||'').trim());})||flds.find(function(x){return /workstream/i.test(x.name||'');});
+      if(m){localStorage.setItem('plt_jira_ws_field',m.id);return m.id;}
+      localStorage.setItem('plt_jira_ws_field','__none__');}
+  }catch(e){}
+  return '';
+}
+async function discoverEpicsFromJira(projByKey,headers,dry){
+  var out=[];
+  var wsField=await jiraWorkstreamField(headers);if(!wsField)return out;
+  var projKey=(localStorage.getItem('plt_jira_epic_project')||'PLT').trim().toUpperCase();
+  var ddField=localStorage.getItem('plt_jira_duedate_field')||'';if(ddField==='__none__')ddField='';
+  var fields='summary,status,duedate,priority,created,updated,'+wsField+(ddField?','+ddField:'');
+  var jql='project = '+projKey+' AND issuetype = Epic AND statusCategory != Done AND cf['+wsField.replace('customfield_','')+'] is not EMPTY ORDER BY updated DESC';
+  var issues=[],tok=null;
+  for(var i=0;i<6;i++){
+    var url=JIRA+'/rest/api/3/search/jql?jql='+encodeURIComponent(jql)+'&fields='+fields+'&maxResults=100'+(tok?'&nextPageToken='+encodeURIComponent(tok):'');
+    var r=await jFetch(url,{headers:headers});if(!r.ok)break;
+    var d=await r.json();issues=issues.concat(d.issues||[]);
+    if(d.isLast||!d.nextPageToken)break;tok=d.nextPageToken;
+  }
+  var known={};projects.forEach(function(p){if(p.jiraKey)known[String(p.jiraKey).toUpperCase()]=1;});
+  var wsNames={};projects.forEach(function(p){if(p.workstream&&p.workstream!=='Unassigned')wsNames[p.workstream.toLowerCase()]=p.workstream;});
+  var nowIso=new Date().toISOString(),stale=Date.now()-30*864e5;
+  if(!dry){try{await refreshMissingWs(projKey,wsField,headers,known);}catch(e){}}
+  issues.forEach(function(ei){
+    var K=String(ei.key).toUpperCase();if(known[K])return;
+    var ef=ei.fields||{};var sName=(ef.status&&ef.status.name)||'';
+    if((ef.status&&ef.status.statusCategory&&ef.status.statusCategory.key==='done')||mapJiraStatus(sName)==='done')return;
+    var wv=ef[wsField];if(Array.isArray(wv))wv=wv[0];if(wv&&typeof wv==='object')wv=wv.value||wv.name||'';
+    wv=String(wv||'').replace(/\s+/g,' ').trim();if(!wv)return;
+    var ws=wsNames[wv.toLowerCase()]||wv;
+    var pn=String((ef.priority&&ef.priority.name)||'').toLowerCase();var pri=/highest|blocker|critical/.test(pn)?1:/high/.test(pn)?2:3;
+    var dd='';var raw=ddField?ef[ddField]:null;if(raw&&typeof raw==='string')dd=raw.slice(0,10);if(!dd&&ef.duedate)dd=ef.duedate;
+    var st=mapJiraStatus(sName);
+    var staleHold=st==='blocked'&&ef.updated&&Date.parse(ef.updated)<stale;
+    out.push({id:'p_jira_'+K.replace(/[^A-Z0-9]/g,''),name:String(ef.summary||K).trim(),workstream:ws,priority:pri,status:st,jiraKey:K,deadline:dd,quarter:'',size:'M',archived:!!staleHold,autoAdded:true,created:nowIso,dateFromJira:!!dd,statusFromJira:true});
+  });
+  if(!dry)out.forEach(function(np){projects.push(np);assignments[np.id]=[];if(!np.archived&&projByKey)projByKey[np.jiraKey]=np;});
+  return out;
+}
+async function refreshMissingWs(projKey,wsField,headers,known){
+  var jql='project = '+projKey+' AND issuetype = Epic AND statusCategory != Done AND cf['+wsField.replace('customfield_','')+'] is EMPTY ORDER BY updated DESC';
+  var miss=[],tok=null;
+  for(var j=0;j<3;j++){
+    var u=JIRA+'/rest/api/3/search/jql?jql='+encodeURIComponent(jql)+'&fields=summary,status,updated,parent&maxResults=100'+(tok?'&nextPageToken='+encodeURIComponent(tok):'');
+    var r=await jFetch(u,{headers:headers});if(!r.ok)return null;
+    var d=await r.json();miss=miss.concat(d.issues||[]);
+    if(d.isLast||!d.nextPageToken)break;tok=d.nextPageToken;
+  }
+  var list=miss.filter(function(e){return !known[String(e.key).toUpperCase()];}).map(function(e){var f=e.fields||{};return {k:e.key,s:String(f.summary||'').trim(),st:(f.status&&f.status.name)||'',p:(f.parent&&f.parent.fields&&f.parent.fields.summary)||''};});
+  try{localStorage.setItem('plt_epics_nows',JSON.stringify({at:Date.now(),list:list}));}catch(e){}
+  return list;
+}
+function epicsNoWs(){try{var o=JSON.parse(localStorage.getItem('plt_epics_nows')||'null');return (o&&o.list)||[];}catch(e){return [];}}
+function openMissingWs(){
+  var list=epicsNoWs();
+  var rows=list.length?list.map(function(e){return '<a href="'+JIRA+'/browse/'+e.k+'" target="_blank" style="display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid var(--bdr);text-decoration:none"><span style="font-family:var(--mono);font-size:10px;color:var(--acc);flex-shrink:0">'+e.k+'</span><div style="flex:1;min-width:0"><div style="font-size:12px;color:var(--t);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+e.s+'</div>'+(e.p?'<div style="font-size:10px;color:var(--t3)">under '+e.p+'</div>':'')+'</div><span style="font-size:10px;color:var(--t3);flex-shrink:0">'+e.st+'</span></a>';}).join(''):'<div style="font-size:12px;color:var(--t3);padding:10px">None \u2014 every open PLT epic has a Workstream.</div>';
+  mxModal('Epics without a Workstream',list.length,'<div style="font-size:11px;color:var(--t2);padding:8px 8px 6px;line-height:1.5">These open PLT epics aren\'t shown because their <b>Workstream</b> field is empty in Jira. Set it there (click a row to open the epic) and it will appear after the next sync.</div>'+rows,600);
+}
 async function autoAssignFromJira(silent){
   if(!jiraReady()){if(silent)throw new Error('Jira not connected');openSettings('jira');return;}
   const headers=jiraHeaders();
@@ -2341,61 +2604,25 @@ async function autoAssignFromJira(silent){
       if(data.isLast||!data.nextPageToken||!batch.length)break;nextPageToken=data.nextPageToken;
     }
     const norm=s=>(s||'').toLowerCase().replace(/\s+/g,' ').trim();
-    function matchDev(a){if(!a)return null;const email=(a.emailAddress||'').toLowerCase();let d=email?devs.find(x=>(x.email||'').toLowerCase()===email):null;if(d)return d;const nm=norm(a.displayName);d=devs.find(x=>norm(x.name)===nm);if(d)return d;const t=nm.split(' ');const first=t[0],last=t[t.length-1];return devs.find(x=>{const xt=norm(x.name).split(' ');return xt[0]===first&&xt[xt.length-1]===last;});}
+    function matchDev(a){if(!a)return null;const email=(a.emailAddress||'').toLowerCase();let d=email?devs.find(x=>(x.email||'').toLowerCase()===email):null;if(d)return d;const nm=norm(a.displayName);d=devs.find(x=>norm(x.name)===nm);if(d)return d;const t=nm.split(' ');const first=t[0],last=t[t.length-1];const byFL=devs.find(x=>{const xt=norm(x.name).split(' ');return xt[0]===first&&xt[xt.length-1]===last;});if(byFL)return byFL;if(t.length===1){const c=devs.filter(x=>norm(x.name).split(' ')[0]===first);if(c.length===1)return c[0];}return null;}
     const todayStr=new Date().toISOString().slice(0,10);
     const _now=new Date();const _ms=new Date(_now.getFullYear(),_now.getMonth(),1);const monthStartISO=_ms.toISOString().slice(0,10);const ago14ISO=(function(){var d=new Date();d.setDate(d.getDate()-14);return d.toISOString().slice(0,10);})();
     let _bd=0;for(let d=new Date(_ms);d<=_now;d.setDate(d.getDate()+1)){const wd=d.getDay();if(wd>=1&&wd<=5)_bd++;}
     const HPW=+(localStorage.getItem('plt_alloc_hours_per_week')||40)||40;const capElapsed=Math.max(1,_bd)*(HPW/5);
     const byProj={};const otherW={};const hoursByProj={};const engT={};const recentWork={};const unmatchedA={};let noEpic=0;
-    // ---- discover epics in Jira that aren't tracked yet and add them as projects ----
+    // ---- add open PLT epics that have a Workstream set in Jira ----
     const addedP=[];
     if(localStorage.getItem('plt_autoadd')!=='0'){
-      try{
-        const known={};projects.forEach(p=>{if(p.jiraKey)known[String(p.jiraKey).toUpperCase()]=1;});
-        const cand={};
-        issues.forEach(is=>{const f=is.fields;if(!f)return;if(f.issuetype&&/epic/i.test(f.issuetype.name||''))return;const dev=matchDev(f.assignee);if(!dev)return;
-          const par=f.parent;if(par&&par.fields&&par.fields.issuetype&&!/epic/i.test(par.fields.issuetype.name||''))return;
-          const pk=(par&&par.key)||(epicField&&f[epicField])||null;if(!pk)return;
-          const K=String(pk).toUpperCase();if(known[K])return;
-          const cc=tkCat((f.status&&f.status.name)||'');if(cc!=='active'&&cc!=='qa')return;
-          const c=cand[K]=cand[K]||{key:K,devs:{},n:0};c.n++;c.devs[dev.id]=1;});
-        const ckeys=Object.keys(cand);
-        if(ckeys.length){
-          let ddField=localStorage.getItem('plt_jira_duedate_field')||'';if(ddField==='__none__')ddField='';
-          const efields='summary,status,duedate,priority,labels,components,created'+(ddField?','+ddField:'');
-          const wsKnown={};projects.forEach(p=>{if(p.workstream&&p.workstream!=='Unassigned')wsKnown[p.workstream]=1;});
-          const wsNames=Object.keys(wsKnown);const low=x=>String(x||'').toLowerCase();const nowIso=new Date().toISOString();
-          for(let i=0;i<ckeys.length;i+=40){
-            const batch=ckeys.slice(i,i+40);
-            const er=await jFetch(JIRA+'/rest/api/3/search/jql?jql='+encodeURIComponent('issuekey in ('+batch.join(',')+')')+'&fields='+efields+'&maxResults=40',{headers:headers});
-            if(!er.ok)break;
-            const ed=await er.json();
-            (ed.issues||[]).forEach(ei=>{
-              const ef=ei.fields||{};const sName=(ef.status&&ef.status.name)||'';
-              if((ef.status&&ef.status.statusCategory&&ef.status.statusCategory.key==='done')||mapJiraStatus(sName)==='done')return;
-              const K=String(ei.key).toUpperCase();if(known[K])return;
-              const name=String(ef.summary||K).trim();
-              let ws=null;
-              const pre=name.match(/^\[([^\]]+)\]/);if(pre)ws=wsNames.find(w=>low(w)===low(pre[1]))||null;
-              if(!ws){const tags=(ef.labels||[]).concat((ef.components||[]).map(c=>c.name)).map(low);ws=wsNames.find(w=>tags.indexOf(low(w))>=0)||null;}
-              if(!ws){const tally={};Object.keys((cand[K]||{devs:{}}).devs).forEach(did=>{projects.forEach(p=>{if(p.archived||p.status==='done'||!p.workstream||p.workstream==='Unassigned')return;if((assignments[p.id]||[]).some(a=>a.devId===did))tally[p.workstream]=(tally[p.workstream]||0)+1;});});const best=Object.keys(tally).sort((a,b)=>tally[b]-tally[a])[0];if(best)ws=best;}
-              const pn=low(ef.priority&&ef.priority.name);const pri=/highest|blocker|critical/.test(pn)?1:/high/.test(pn)?2:3;
-              let dd='';const raw=ddField?ef[ddField]:null;if(raw&&typeof raw==='string')dd=raw.slice(0,10);if(!dd&&ef.duedate)dd=ef.duedate;
-              const np={id:'p_jira_'+K.replace(/[^A-Z0-9]/g,''),name:name,workstream:ws||'Unassigned',priority:pri,status:mapJiraStatus(sName),jiraKey:K,deadline:dd,quarter:'',size:'M',archived:false,autoAdded:true,created:nowIso,dateFromJira:!!dd,statusFromJira:true};
-              projects.push(np);projByKey[K]=np;known[K]=1;assignments[np.id]=[];addedP.push(np);
-            });
-          }
-        }
-      }catch(e){console.warn('Auto-add from Jira failed',e);}
+      try{(await discoverEpicsFromJira(projByKey,headers,false)).forEach(np=>addedP.push(np));}
+      catch(e){console.warn('Auto-add from Jira failed',e);}
     }
-
     issues.forEach(is=>{const f=is.fields;if(!f)return;const dev=matchDev(f.assignee);if(dev&&f.assignee&&f.assignee.avatarUrls){const av=f.assignee.avatarUrls['48x48']||f.assignee.avatarUrls['32x32'];if(av)dev.avatar=av;}
       const stName=(f.status&&f.status.name)||'';
       const pts=(spField&&typeof f[spField]==='number'&&!isNaN(f[spField]))?f[spField]:null;
-      if(dev&&!(f.issuetype&&/epic/i.test(f.issuetype.name||''))){engT[dev.id]=engT[dev.id]||{tickets:[],rollover:0,asOf:todayStr,sprint:'Live'};engT[dev.id].tickets.push({k:is.key,s:f.summary||'',p:pts,st:stName,it:(f.issuetype&&f.issuetype.name)||'',u:f.updated||'',r:f.resolutiondate||''});}
+      if(dev&&!(f.issuetype&&/epic/i.test(f.issuetype.name||''))){const _ek=(f.parent&&f.parent.key)||(epicField&&f[epicField])||'';engT[dev.id]=engT[dev.id]||{tickets:[],rollover:0,asOf:todayStr,sprint:'Live'};engT[dev.id].tickets.push({k:is.key,s:f.summary||'',p:pts,st:stName,it:(f.issuetype&&f.issuetype.name)||'',u:f.updated||'',r:f.resolutiondate||'',e:_ek?String(_ek).toUpperCase():''});}
       else if(f.assignee&&f.assignee.displayName){unmatchedA[f.assignee.displayName]=1;}
       let epicKey=(f.parent&&f.parent.key)||(epicField&&f[epicField])||null;
-      const _addOther=function(){if(dev&&!(f.issuetype&&/epic/i.test(f.issuetype.name||''))){const _c=tkCat(stName);const w=(_c==='active'||_c==='qa'||_c==='blocked')?((pts!=null&&pts>0)?pts:3)*tkStateWeight(stName):0;if(w>0){const o=otherW[dev.id]=otherW[dev.id]||{w:0,n:0};o.w+=w;o.n++;}}};
+      const _addOther=function(){if(dev&&!(f.issuetype&&/epic/i.test(f.issuetype.name||''))){const _c=tkCat(stName);const w=((_c==='active'||_c==='qa'||_c==='blocked')&&tkFresh({u:f.updated}))?((pts!=null&&pts>0)?pts:3)*tkStateWeight(stName):0;if(w>0){const o=otherW[dev.id]=otherW[dev.id]||{w:0,n:0};o.w+=w;o.n++;}}};
       if(!epicKey){noEpic++;_addOther();return;}
       const proj=projByKey[String(epicKey).toUpperCase()];if(!proj){_addOther();return;}
       if(dev){const load=((pts!=null&&pts>0)?pts:3)*tkStateWeight(stName);byProj[proj.id]=byProj[proj.id]||{};byProj[proj.id][dev.id]=(byProj[proj.id][dev.id]||0)+load;}
@@ -2568,7 +2795,7 @@ async function syncJiraTickets(silent){
     }
     // bucket by assignee → isoWeek, summing story points (fall back to counts if no SP field)
     const norm=s=>(s||'').toLowerCase().replace(/\s+/g,' ').trim();
-    function matchDev(assignee){if(!assignee)return null;const email=(assignee.emailAddress||'').toLowerCase();let d=email?devs.find(x=>(x.email||'').toLowerCase()===email):null;if(d)return d;const nm=norm(assignee.displayName);d=devs.find(x=>norm(x.name)===nm);if(d)return d;const t=nm.split(' ');const first=t[0],last=t[t.length-1];return devs.find(x=>{const xt=norm(x.name).split(' ');return xt[0]===first&&xt[xt.length-1]===last;});}
+    function matchDev(assignee){if(!assignee)return null;const email=(assignee.emailAddress||'').toLowerCase();let d=email?devs.find(x=>(x.email||'').toLowerCase()===email):null;if(d)return d;const nm=norm(assignee.displayName);d=devs.find(x=>norm(x.name)===nm);if(d)return d;const t=nm.split(' ');const first=t[0],last=t[t.length-1];const byFL=devs.find(x=>{const xt=norm(x.name).split(' ');return xt[0]===first&&xt[xt.length-1]===last;});if(byFL)return byFL;if(t.length===1){const c=devs.filter(x=>norm(x.name).split(' ')[0]===first);if(c.length===1)return c[0];}return null;}
     const tk={};const wkSet={};const unmatched={};let unpointed=0,totalPts=0,totalTk=0;
     issues.forEach(is=>{const a=is.fields&&is.fields.assignee;const rd=is.fields&&is.fields.resolutiondate;if(!rd)return;const wk=isoWeek(new Date(rd));wkSet[wk]=1;const raw=spField?is.fields[spField]:null;const pts=(typeof raw==='number'&&!isNaN(raw))?raw:0;if(spField&&pts===0)unpointed++;totalTk++;totalPts+=pts;const dev=matchDev(a);if(!dev){if(a&&a.displayName)unmatched[a.displayName]=(unmatched[a.displayName]||0)+1;return;}if(!tk[dev.id])tk[dev.id]={weeks:{},total:0,tickets:0};tk[dev.id].weeks[wk]=(tk[dev.id].weeks[wk]||0)+pts;tk[dev.id].total+=pts;tk[dev.id].tickets++;});
     const weekList=Object.keys(wkSet).sort();
@@ -2632,7 +2859,7 @@ async function syncJiraPRs(){
   }catch(err){showToast('PR sync failed: '+err.message,'warn');}
 }
 function openAddProjModal(){
-  document.getElementById('mc').innerHTML='<div class="backdrop" onclick="if(event.target===this)closeModal()"><div class="modal"><div class="mh"><div class="mt">Add Project</div><button class="ib" onclick="closeModal()"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="1" y1="1" x2="11" y2="11"/><line x1="11" y1="1" x2="1" y2="11"/></svg></button></div><div class="mb"><div class="field"><label>Project Name</label><input id="np-name" placeholder="e.g. New checkout flow" autofocus></div><div class="field"><label>Workstream</label><select id="np-ws">'+WS_ORDER.map(ws=>'<option value="'+ws+'">'+ws+'</option>').join('')+'</select></div><div class="field"><label>Priority</label><select id="np-pri">'+[1,2,3,4].map(n=>'<option value="'+n+'">'+priLabel(n)+'</option>').join('')+'</select></div><div class="field"><label>Status</label><select id="np-status"><option value="planned">Planned</option><option value="in-progress">In progress</option><option value="at-risk">At risk</option><option value="blocked">Blocked</option><option value="done">Done</option></select></div><div class="field"><label>Jira Key (optional — leave blank for non-Jira work)</label><input id="np-jira" placeholder="PLT-1234 or blank"></div><div class="field"><label>Deadline (optional)</label><input type="date" id="np-deadline"></div><div class="field"><label>Quarter</label><select id="np-q"><option value="">—</option>'+['Q1 2026','Q2 2026','Q3 2026','Q4 2026'].map(q=>'<option value="'+q+'">'+q+'</option>').join('')+'</select></div></div><div class="mf"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-p" onclick="addProject()">Add Project</button></div></div></div>';
+  document.getElementById('mc').innerHTML='<div class="backdrop" onclick="if(event.target===this)closeModal()"><div class="modal"><div class="mh"><div class="mt">Add Project</div><button class="ib" onclick="closeModal()"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="1" y1="1" x2="11" y2="11"/><line x1="11" y1="1" x2="1" y2="11"/></svg></button></div><div class="mb"><div class="field"><label>Project Name</label><input id="np-name" placeholder="e.g. New checkout flow" autofocus></div><div class="field"><label>Workstream</label><select id="np-ws">'+wsAll().map(ws=>'<option value="'+ws+'">'+ws+'</option>').join('')+'</select></div><div class="field"><label>Priority</label><select id="np-pri">'+[1,2,3,4].map(n=>'<option value="'+n+'">'+priLabel(n)+'</option>').join('')+'</select></div><div class="field"><label>Status</label><select id="np-status"><option value="planned">Planned</option><option value="in-progress">In progress</option><option value="at-risk">At risk</option><option value="blocked">Blocked</option><option value="done">Done</option></select></div><div class="field"><label>Jira Key (optional — leave blank for non-Jira work)</label><input id="np-jira" placeholder="PLT-1234 or blank"></div><div class="field"><label>Deadline (optional)</label><input type="date" id="np-deadline"></div><div class="field"><label>Quarter</label><select id="np-q"><option value="">—</option>'+['Q1 2026','Q2 2026','Q3 2026','Q4 2026'].map(q=>'<option value="'+q+'">'+q+'</option>').join('')+'</select></div></div><div class="mf"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-p" onclick="addProject()">Add Project</button></div></div></div>';
 }
 function addProject(){
   const name=document.getElementById('np-name').value.trim();if(!name)return;
@@ -2646,14 +2873,48 @@ function addProject(){
 }
 function openEditDevModal(devId){
   const dev=devs.find(d=>d.id===devId);if(!dev)return;const c=gc(dev.colorIdx);
-  document.getElementById('mc').innerHTML='<div class="backdrop" onclick="if(event.target===this)closeModal()"><div class="modal"><div class="mh"><div class="mt">Edit Developer</div><button class="ib" onclick="closeModal()"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="1" y1="1" x2="11" y2="11"/><line x1="11" y1="1" x2="1" y2="11"/></svg></button></div><div class="mb"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><div style="width:40px;height:40px;border-radius:50%;background:'+c.bg+';color:'+c.t+';display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600">'+ini(dev.name)+'</div><div><div style="font-size:13px;font-weight:600">'+dev.name+'</div><div style="font-size:11px;color:var(--t2)">'+alloc(dev.id)+'% allocated</div></div></div><div class="field"><label>Role</label><input id="ed-role" value="'+(dev.role||'')+'" placeholder="e.g. Backend, Frontend"></div><div class="field"><label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="ed-offshore" '+(dev.offshore?'checked':'')+'> Offshore team member</label></div><div class="field"><label>Capacity on PLT (%)</label><input type="range" id="ed-cap" min="10" max="100" step="10" value="'+(dev.capacity||100)+'" oninput="document.getElementById(\'ed-cap-val\').textContent=this.value+\'%\'"><span id="ed-cap-val">'+(dev.capacity||100)+'%</span></div></div><div class="mf"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-p" onclick="saveEditDev(\''+devId+'\')">Save</button></div></div></div>';
+  document.getElementById('mc').innerHTML='<div class="backdrop" onclick="if(event.target===this)closeModal()"><div class="modal"><div class="mh"><div class="mt">Edit Developer</div><button class="ib" onclick="closeModal()"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="1" y1="1" x2="11" y2="11"/><line x1="11" y1="1" x2="1" y2="11"/></svg></button></div><div class="mb"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><div style="width:40px;height:40px;border-radius:50%;background:'+c.bg+';color:'+c.t+';display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600">'+ini(dev.name)+'</div><div><div style="font-size:13px;font-weight:600">'+dev.name+'</div><div style="font-size:11px;color:var(--t2)">'+alloc(dev.id)+'% allocated</div></div></div><div class="field"><label>Role</label><input id="ed-role" value="'+(dev.role||'')+'" placeholder="e.g. Backend, Frontend"></div><div class="field"><label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="ed-offshore" '+(dev.offshore?'checked':'')+'> Offshore team member</label></div><div class="field"><label>Capacity on PLT (%)</label><input type="range" id="ed-cap" min="10" max="100" step="10" value="'+(dev.capacity||100)+'" oninput="document.getElementById(\'ed-cap-val\').textContent=this.value+\'%\'"><span id="ed-cap-val">'+(dev.capacity||100)+'%</span></div></div><div class="mf"><button class="btn" style="margin-right:auto;color:var(--red)" onclick="removeDev(\''+devId+'\')">Remove from team</button><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-p" onclick="saveEditDev(\''+devId+'\')">Save</button></div></div></div>';
 }
 function saveEditDev(devId){const dev=devs.find(d=>d.id===devId);if(!dev)return;dev.role=document.getElementById('ed-role').value.trim();dev.offshore=document.getElementById('ed-offshore').checked;dev.capacity=+document.getElementById('ed-cap').value;save();closeModal();renderDevs();}
 function openAddDevModal(){
   document.getElementById('mc').innerHTML='<div class="backdrop" onclick="if(event.target===this)closeModal()"><div class="modal"><div class="mh"><div class="mt">Add Developer</div><button class="ib" onclick="closeModal()"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="1" y1="1" x2="11" y2="11"/><line x1="11" y1="1" x2="1" y2="11"/></svg></button></div><div class="mb"><div class="field"><label>Name</label><input id="ad-name" placeholder="First Last" autofocus></div><div class="field"><label>Role</label><input id="ad-role" placeholder="e.g. Backend, Frontend, Full Stack"></div><div class="field"><label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="ad-offshore"> Offshore team member</label></div></div><div class="mf"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-p" onclick="addDev()">Add</button></div></div></div>';
 }
 function addDev(){const name=document.getElementById('ad-name').value.trim();if(!name)return;const id='d_'+Date.now();devs.push({id:id,name:name,role:document.getElementById('ad-role').value.trim(),skills:[],colorIdx:devs.length%COLORS.length,offshore:document.getElementById('ad-offshore').checked,capacity:100});save();closeModal();renderDevs();}
-function removeDev(devId){if(!confirm('Remove this developer?'))return;devs=devs.filter(d=>d.id!==devId);Object.keys(assignments).forEach(pid=>{assignments[pid]=(assignments[pid]||[]).filter(a=>a.devId!==devId);});save();render();}
+function removedDevs(){try{return JSON.parse(localStorage.getItem('plt_removed_devs')||'[]');}catch(e){return [];}}
+function afterTeamChange(reopen){
+  try{closeModal();}catch(e){}
+  if(view==='team')renderTeamView();else render();
+  if(reopen)openManageTeam();
+}
+function removeDev(devId,fromManage){
+  var dev=devs.find(function(d){return d.id===devId;});if(!dev)return;
+  var n=Object.keys(assignments).filter(function(pid){return (assignments[pid]||[]).some(function(a){return a.devId===devId;});}).length;
+  if(!confirm('Remove '+dev.name+' from the team?\n\nThey\'ll be taken off '+n+' project'+(n===1?'':'s')+' and drop out of capacity and metrics. You can restore them from Manage.'))return;
+  var held={};Object.keys(assignments).forEach(function(pid){var e=(assignments[pid]||[]).filter(function(a){return a.devId===devId;});if(e.length)held[pid]=e;});
+  var bk=removedDevs().filter(function(x){return x.dev.id!==devId;});bk.push({dev:dev,held:held,at:Date.now()});
+  try{localStorage.setItem('plt_removed_devs',JSON.stringify(bk));}catch(e){}
+  devs=devs.filter(function(d){return d.id!==devId;});
+  Object.keys(assignments).forEach(function(pid){assignments[pid]=(assignments[pid]||[]).filter(function(a){return a.devId!==devId;});});
+  save();afterTeamChange(!!fromManage);
+  showToast('Removed '+dev.name+' \u2014 restore anytime from Manage','info');
+}
+function restoreDev(devId){
+  var bk=removedDevs(),x=bk.find(function(r){return r.dev.id===devId;});if(!x)return;
+  if(!devs.some(function(d){return d.id===devId;}))devs.push(x.dev);
+  Object.keys(x.held||{}).forEach(function(pid){if(!projects.some(function(p){return p.id===pid;}))return;var cur=assignments[pid]||(assignments[pid]=[]);x.held[pid].forEach(function(a){if(!cur.some(function(c){return c.devId===devId&&c.src===a.src;}))cur.push(a);});});
+  try{localStorage.setItem('plt_removed_devs',JSON.stringify(bk.filter(function(r){return r.dev.id!==devId;})));}catch(e){}
+  save();afterTeamChange(true);
+  showToast('Restored '+x.dev.name,'info');
+}
+function openManageTeam(){
+  var rows=devs.slice().sort(function(a,b){return a.name.localeCompare(b.name);}).map(function(d){
+    var n=projects.filter(function(p){return !p.archived&&p.status!=='done'&&(assignments[p.id]||[]).some(function(a){return a.devId===d.id;});}).length,c=gc(d.colorIdx);
+    return '<div style="display:flex;align-items:center;gap:10px;padding:7px 8px;border-bottom:1px solid var(--bdr)"><span style="width:26px;height:26px;border-radius:50%;background:'+c.bg+';color:'+c.t+';display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex-shrink:0">'+ini(d.name)+'</span><div style="flex:1;min-width:0"><div style="font-size:12px">'+d.name+'</div><div style="font-size:10px;color:var(--t3)">'+(d.role||'\u2014')+' \u00b7 '+n+' active project'+(n===1?'':'s')+'</div></div><select onchange="setDevVendor(\''+d.id+'\',this.value)" style="font-size:10px;padding:2px 4px;margin-right:6px"><option value=""'+(!d.offshore?' selected':'')+'>Onshore</option>'+VENDORS.map(function(v){return '<option value="'+v.id+'"'+(d.vendor===v.id?' selected':'')+'>'+v.name+'</option>';}).join('')+'<option value="other"'+(d.offshore&&!d.vendor?' selected':'')+'>Other offshore</option></select><button class="btn" style="font-size:10px;color:var(--red)" onclick="removeDev(\''+d.id+'\',true)">Remove</button></div>';
+  }).join('');
+  var rem=removedDevs();
+  var remHTML=rem.length?'<div style="font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--t3);margin:16px 8px 4px">Removed ('+rem.length+')</div>'+rem.map(function(r){return '<div style="display:flex;align-items:center;gap:10px;padding:7px 8px;border-bottom:1px solid var(--bdr)"><span style="flex:1;font-size:12px;color:var(--t2)">'+r.dev.name+'</span><button class="btn" style="font-size:10px" onclick="restoreDev(\''+r.dev.id+'\')">Restore</button></div>';}).join(''):'';
+  mxModal('Manage team',devs.length+' engineers','<div style="font-size:11px;color:var(--t2);padding:8px 8px 6px;line-height:1.5">Remove engineers who shouldn\'t appear in capacity, projects or metrics. Removals are reversible and are saved in this browser.</div>'+rows+remHTML+'<div style="padding:10px 8px 0"><button class="btn" onclick="openAddDevModal()">+ Add engineer</button></div>',520);
+}
 function exportData(){const data={devs:devs,projects:projects,assignments:assignments,pltEpics:pltEpics,collapseState:collapseState,exportedAt:new Date().toISOString()};const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='plt-planner-'+new Date().toISOString().slice(0,10)+'.json';a.click();}
 function importData(event){const file=event.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{try{const d=JSON.parse(e.target.result);if(d.devs)devs=d.devs;if(d.projects)projects=d.projects;if(d.assignments)assignments=d.assignments;if(d.pltEpics)pltEpics=d.pltEpics;if(d.collapseState)collapseState=d.collapseState;save();render();showToast('✓ Data imported','info');}catch(err){showToast('Import failed: '+err.message,'warn');}};reader.readAsText(file);}
 // ── Weekly Status Generator ──
@@ -2777,6 +3038,8 @@ async function sendChatMessage(){
 }
 function render(){if(view==='overview')renderOverview();else if(view==='board'){renderBoard();renderSummary();}else if(view==='team')renderTeamView();else if(view==='flow')renderFlowView();}
 view='overview';
+applyDevRemovals();
+applyVendorRoster();
 applyExecMode();
 setView('overview');
 function updateSyncStatus(){const el=document.getElementById('sync-status');if(!el)return;const t=+(localStorage.getItem('plt_last_sync')||0);if(!t){el.textContent=jiraReady()?'Not synced yet':'';return;}const mins=Math.floor((Date.now()-t)/60000);el.textContent=mins<1?'Synced just now':mins<60?'Synced '+mins+'m ago':'Synced '+Math.floor(mins/60)+'h ago';}
