@@ -1089,7 +1089,7 @@ function teamFilterChips(){
   var offOn=(f==='off'||!!vendorById(f));
   var offChip='<button class="fb'+(offOn?' on':'')+'" onclick="setTeamFilter(\'off\')" style="margin-right:6px">Offshore <span style="opacity:.6">'+nOff+'</span></button>';
   var sub=offOn?'<span style="display:inline-flex;align-items:center;gap:4px;margin-right:6px;padding-left:8px;border-left:1px solid var(--bdr)">'+VENDORS.map(function(v){var n=devs.filter(function(d){return d.vendor===v.id;}).length;return '<button class="fb'+(f===v.id?' on':'')+'" onclick="setTeamFilter(\''+(f===v.id?'off':v.id)+'\')" style="font-size:10px;padding:2px 8px">'+v.name+' <span style="opacity:.6">'+n+'</span></button>';}).join('')+'</span>':'';
-  return '<div style="margin-bottom:18px;display:flex;align-items:center;flex-wrap:wrap;gap:4px">'+chip('all','All',devs.length)+chip('on','Onshore',devs.length-nOff)+(nOff?offChip+sub:'')+tools+'</div>';
+  return '<div style="margin-bottom:18px;display:flex;align-items:center;flex-wrap:wrap;gap:4px">'+chip('all','All',devs.length)+chip('on','Onshore',devs.length-nOff)+(nOff?offChip:'')+tools+'</div>';
 }
 function toggleOffshore(devId,on){var d=devs.find(function(x){return x.id===devId;});if(!d)return;d.offshore=!!on;save();}
 function offDone14(devId){var data=velData();if(data&&data.items&&data.items[devId]){var cfg=velCfg(),lim=Date.now()-14*864e5;return data.items[devId].filter(function(it){return it[1]>=lim&&velInc(it,cfg.rule);}).length;}var H=mxHistory(),keys=Object.keys(H).sort().slice(-2);return keys.reduce(function(a,k){return a+(((H[k]||{}).d||{})[devId]||0);},0);}
@@ -1212,8 +1212,44 @@ function vendRerender(){if(view==='team'){try{renderTeamView();}catch(e){}}}
 function vendFilterIds(){var f=window._teamFilter;return f==='off'?VENDORS.map(function(v){return v.id;}):(vendorById(f)?[f]:[]);}
 function vendPanels(){
   var vids=vendFilterIds();if(!vids.length)return '';
-  var data=vendData(),today=mxIso(Date.now());
-  return vids.map(function(vid){return vendSection(vid,data,today);}).join('')+'<div style="font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--t3);margin:8px 0 10px">Engineers</div>';
+  var data=vendData(),today=mxIso(Date.now()),esc=function(t){return String(t||'').replace(/</g,'&lt;');};
+  var byName={};devs.forEach(function(d){if(d.vendor)byName[String(d.name||'').toLowerCase()]=d.vendor;});
+  var map={},order=[];
+  VENDORS.forEach(function(v){vendorProjects(v.id).forEach(function(it){var k=it.key||it.name;if(!map[k]){map[k]={it:it,v:{},k:k};order.push(k);}map[k].v[v.id]=map[k].v[v.id]||{};});});
+  order.forEach(function(k){var m=map[k],it=m.it,s=data&&data.stats&&data.stats[it.key];
+    var pr=it.pid&&projects.find(function(p){return p.id===it.pid;});
+    if(pr)(assignments[pr.id]||[]).forEach(function(x){var d=devs.find(function(y){return y.id===x.devId;});if(d&&d.vendor&&m.v[d.vendor])m.v[d.vendor][d.name.split(' ')[0]]=1;});
+    if(s)Object.keys(s.asg||{}).forEach(function(n){if(vendRemoved(n))return;var vv=byName[n.toLowerCase()];if(!vv){var ks=Object.keys(m.v);vv=ks.length===1?ks[0]:'';}if(vv&&m.v[vv])m.v[vv][n.split(' ')[0]]=1;});
+    m.s=s;m.open=s?Math.max(0,s.t-s.d):0;m.bl=s?s.bl:0;
+    var due=it.due&&/^\d{4}-\d\d-\d\d/.test(it.due)?it.due.slice(0,10):'';m.due=due;m.over=!!(due&&due<today&&it.status!=='done');
+    m.attn=it.status!=='done'&&(it.status==='blocked'||it.status==='at-risk'||m.over||m.bl>0);
+  });
+  var shown=order.map(function(k){return map[k];}).filter(function(m){return vids.some(function(v){return m.v[v];});});
+  var act=shown.filter(function(m){return m.it.status!=='done';}),doneL=shown.filter(function(m){return m.it.status==='done';});
+  var attn=act.filter(function(m){return m.attn;}),prog=act.filter(function(m){return !m.attn;});
+  var cnt=function(vid){return act.filter(function(m){return m.v[vid];}).length;};
+  var flight=act.reduce(function(a,m){return a+(m.s?m.s.ip:0);},0);
+  var tile=function(n,l,c){return '<div style="background:var(--sur,var(--s1));border:1px solid var(--bdr);border-radius:10px;padding:10px 14px;min-width:140px"><div style="font-size:20px;font-weight:600;line-height:1.2;color:'+(c||'var(--t)')+'">'+n+'</div><div style="font-size:11px;color:var(--t3)">'+l+'</div></div>';};
+  var vt=vids.map(function(v){return '<span>'+cnt(v)+'</span>';}).join(' <span style="color:var(--t3)">\u00b7</span> ');
+  var tiles='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">'+tile(act.length,'active projects')+tile(vt,vids.map(function(v){return vendorById(v).name;}).join(' \u00b7 ')+' projects')+tile(attn.length,'need attention',attn.length?'var(--red)':'')+tile(flight,'tickets in flight')+'</div>';
+  var cols='minmax(200px,2.2fr) 96px '+vids.map(function(){return 'minmax(130px,1.3fr)';}).join(' ')+' 120px 84px';
+  var G='display:grid;grid-template-columns:'+cols+';gap:14px;align-items:center;padding:10px 16px;';
+  var hd='<div style="'+G+'font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--t3);border-bottom:1px solid var(--bdr)"><div>Project</div><div>Status</div>'+vids.map(function(v){return '<div>'+esc(vendorById(v).name)+'</div>';}).join('')+'<div>Open work</div><div style="text-align:right">Due</div></div>';
+  var pill=function(it){var c=it.status==='blocked'?['var(--red)','rgba(217,45,32,.12)']:it.status==='at-risk'?['var(--amb)','rgba(217,119,6,.14)']:it.status==='done'?['var(--grn)','rgba(22,163,74,.12)']:(it.status==='in-progress'||it.status==='on-track')?['var(--blu)','rgba(37,99,235,.12)']:['var(--t3)','var(--s2)'];return '<span style="font-size:11px;font-weight:500;padding:2px 9px;border-radius:99px;color:'+c[0]+';background:'+c[1]+';white-space:nowrap">'+esc(it.jiraStatus&&it.jiraOnly?it.jiraStatus:stLbl(it.status))+'</span>';};
+  var chips=function(o){var n=Object.keys(o||{});return n.length?'<div style="display:flex;flex-wrap:wrap;gap:4px">'+n.map(function(x){return '<span style="font-size:11px;background:var(--s2);border:1px solid var(--bdr);border-radius:99px;padding:1px 8px">'+esc(x)+'</span>';}).join('')+'</div>':'<span style="color:var(--t3);font-size:11px">\u2014</span>';};
+  var row=function(m){var it=m.it,k=m.k,open=!!(window._vendOpen||{})[k],both=Object.keys(m.v).length>1;
+    var meta=(it.key||'')+(it.ws?(it.key?' \u00b7 ':'')+esc(it.ws):'');
+    var work=m.s?'<b style="font-weight:600">'+m.open+'</b> <span style="color:var(--t3);font-size:11px">open'+(m.bl?' \u00b7 <span style="color:var(--red)">'+m.bl+' blocked</span>':'')+'</span>':'<span style="color:var(--t3);font-size:11px">\u2014</span>';
+    var dueH=m.due?'<div style="font-size:11px;text-align:right;color:'+(m.over?'var(--red)':'var(--t2)')+'">'+(m.over?'overdue<br>':'')+new Date(m.due+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})+'</div>':'<div style="text-align:right;color:var(--t3);font-size:11px">\u2014</div>';
+    var r='<div onclick="vendToggle(\''+String(k).replace(/'/g,"\\'")+'\')" style="'+G+'border-bottom:1px solid var(--bdr);cursor:pointer"><div style="min-width:0"><div style="font-size:13px;font-weight:500">'+esc(it.name)+(both?' <span style="font-size:9px;font-weight:600;color:var(--acc);background:var(--s2);border-radius:99px;padding:1px 6px;margin-left:4px">both teams</span>':'')+'</div><div style="font-size:11px;color:var(--t3)">'+meta+'</div></div><div>'+pill(it)+'</div>'+vids.map(function(v){return '<div>'+(m.v[v]?chips(m.v[v]):'<span style="color:var(--t3);font-size:11px">\u2014</span>')+'</div>';}).join('')+'<div>'+work+'</div>'+dueH+'</div>';
+    return open?r+vendRow(it,data,today,true):r;};
+  var grp=function(t){return '<div style="padding:7px 16px;font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--t3);background:var(--s2);border-bottom:1px solid var(--bdr)">'+t+'</div>';};
+  var dOpen=!!(window._vendDone||{}).all;
+  var body=(attn.length?grp('Needs attention')+attn.map(row).join(''):'')+(prog.length?grp('In progress')+prog.map(row).join(''):'')+(!act.length?'<div style="padding:16px;font-size:12px;color:var(--t3)">'+(data?'No active projects. Set the Team field on an epic in Jira, or add a project below.':'Loading from Jira\u2026')+'</div>':'');
+  var doneB=doneL.length?'<div onclick="vendDoneToggle(\'all\')" style="font-size:11px;color:var(--t3);padding:10px 16px;cursor:pointer;border-top:1px solid var(--bdr)">'+(dOpen?'\u25be':'\u25b8')+' Completed ('+doneL.length+')</div>'+(dOpen?doneL.map(row).join(''):''):'';
+  var adds=vids.map(function(vid){var v=vendorById(vid),have={};vendorProjects(vid).forEach(function(it){if(it.key)have[it.key]=1;});var opts=projects.filter(function(p){return !p.archived&&p.status!=='done'&&!(p.jiraKey&&have[String(p.jiraKey).toUpperCase()])&&p.vendor!==vid;}).sort(function(a,b){return a.name.localeCompare(b.name);}).map(function(p){return '<option value="'+p.id+'">'+esc(p.name)+'</option>';}).join('');return '<select onchange="vendAdd(\''+vid+'\',this.value);this.value=\'\'" style="border:none;background:transparent;color:var(--acc);font-size:11px;cursor:pointer;padding:0;outline:none;max-width:140px"><option value="">+ Add to '+esc(v.name)+'</option>'+opts+'</select>';}).join('');
+  var info='Projects come from the Team field on epics in Jira, any you add here, and any project where these teams\' engineers have assigned tickets.';
+  return '<div style="margin-top:30px;padding-top:18px;border-top:1px solid var(--bdr)"><div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:12px"><span style="font-size:13px;font-weight:600">What the offshore teams are working on</span><span title="'+info.replace(/"/g,'&quot;')+'" style="font-size:11px;color:var(--t3);cursor:help">\u24d8</span><span style="flex:1"></span>'+adds+'</div>'+tiles+'<div style="background:var(--sur,var(--s1));border:1px solid var(--bdr);border-radius:10px;overflow-x:auto"><div style="min-width:760px">'+hd+body+doneB+'</div></div></div>';
 }
 function vendRemoved(n){var l=String(n||'').toLowerCase();return !!l&&removedDevs().some(function(r){return String(r.dev.name||'').toLowerCase()===l;});}
 function vendStats(vid,list,data){
@@ -1223,27 +1259,48 @@ function vendStats(vid,list,data){
   return st;
 }
 function vendToggle(k){var m=window._vendOpen=window._vendOpen||{};m[k]=!m[k];vendRerender();}
+function vendDoneToggle(v){var m=window._vendDone=window._vendDone||{};m[v]=!m[v];vendRerender();}
 function vendViaToggle(v){var m=window._vendVia=window._vendVia||{};m[v]=!m[v];vendRerender();}
+
+function vendPeople(vid){
+  var roster=devs.filter(function(d){return d.vendor===vid;});
+  if(!roster.length)return '';
+  var et=window.engTickets||{};
+  roster.sort(function(a,b){return capScore(b).total-capScore(a).total;});
+  var esc=function(t){return String(t||'').replace(/</g,'&lt;');};
+  var cards=roster.map(function(d){
+    var sc=capScore(d),L=devLoad(d.id),C=capCfg();
+    var col=sc.total>C.busy?'var(--red)':sc.total>=C.room?'var(--amb)':sc.total>=C.free?'var(--acc)':'var(--grn)';
+    var cur=(((et[d.id]||{}).tickets)||[]).filter(function(t){var c=tkCat(t.st);return (c==='active'||c==='qa')&&tkFresh(t);}).sort(function(a,b){return String(b.u).localeCompare(String(a.u));});
+    var lines=cur.slice(0,3).map(function(t){return '<div style="display:flex;gap:6px;align-items:baseline;font-size:11px;padding:1px 0"><a href="'+JIRA+'/browse/'+t.k+'" target="_blank" onclick="event.stopPropagation()" style="font-family:var(--mono);font-size:9px;color:var(--acc);text-decoration:none;flex-shrink:0">'+t.k+'</a><span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--t)">'+esc(t.s)+'</span><span style="font-size:9px;color:var(--t3);flex-shrink:0">'+esc(t.st)+'</span></div>';}).join('');
+    var more=cur.length>3?'<div style="font-size:10px;color:var(--t3)">+'+(cur.length-3)+' more</div>':'';
+    return '<div class="eng-card" onclick="openTeamDevDetail(\''+d.id+'\')" style="cursor:pointer"><div style="display:flex;align-items:center;gap:9px;margin-bottom:6px">'+avEl(d,28)+'<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(d.name)+'</div><div style="font-size:10px;color:'+col+'">'+Math.round(sc.total)+'% of capacity \u00b7 '+cur.length+' in flight</div></div></div>'+(lines?lines+more:'<div style="font-size:11px;color:var(--t3)">No active tickets</div>')+'</div>';
+  }).join('');
+  return '<div style="font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--t3);margin:12px 0 6px">Working on now</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:10px">'+cards+'</div>';
+}
+function gridDevs(){return tvDevs();}
+function vTag(d){var v=d&&d.vendor&&vendorById(d.vendor);return v?' <span style="font-size:9px;font-weight:600;padding:1px 6px;border-radius:99px;background:var(--s2);color:var(--t2)">'+v.name+'</span>':'';}
 function vendSection(vid,data,today){
   var v=vendorById(vid),list=vendorProjects(vid),S=vendStats(vid,list,data);
   var order={blocked:0,'at-risk':1,'in-progress':2,'on-track':2,planned:3,done:4};
   var sorter=function(a,b){return (order[a.status]!=null?order[a.status]:3)-(order[b.status]!=null?order[b.status]:3);};
-  var own=list.slice().sort(sorter),via=[];
+  var own=list.filter(function(it){return it.status!=='done';}).sort(sorter),doneL=list.filter(function(it){return it.status==='done';}),via=[];
   var pct=S.t?Math.round(S.d/S.t*100):null,people=Object.keys(S.people).length;
   var parts=[list.length+' project'+(list.length===1?'':'s')];
   if(data){parts.push(S.ip+' in progress');parts.push(S.dc+' done in 14 days');}
-  if(people)parts.push(people+' engineers');if(pct!=null)parts.push(pct+'% done');
+  var roster=devs.filter(function(d){return d.vendor===vid;});parts.push(roster.length+' engineer'+(roster.length===1?'':'s'));
   var have={};list.forEach(function(it){if(it.key)have[it.key]=1;});
   var opts=projects.filter(function(p){return !p.archived&&p.status!=='done'&&!(p.jiraKey&&have[String(p.jiraKey).toUpperCase()])&&p.vendor!==vid;}).sort(function(a,b){return a.name.localeCompare(b.name);}).map(function(p){return '<option value="'+p.id+'">'+p.name+'</option>';}).join('');
   var add='<select onchange="vendAdd(\''+vid+'\',this.value);this.value=\'\'" title="Add a project to '+v.name+'" style="border:none;background:transparent;color:var(--acc);font-size:11px;cursor:pointer;max-width:90px;padding:0;-webkit-appearance:none;appearance:none;outline:none"><option value="">+ Add project</option>'+opts+'</select>';
   var info='Projects come from the Team field on epics in Jira, any you add here, and any project where this team\'s engineers have assigned tickets (pulled from Jira automatically).';
   var head='<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:4px"><span onclick="vendRename(\''+vid+'\')" title="Click to rename" style="font-size:15px;font-weight:700;cursor:text">'+v.name+'</span><span title="'+info.replace(/"/g,'&quot;')+'" style="font-size:11px;color:var(--t3);cursor:help">\u24d8</span><span style="font-size:11px;color:var(--t3);flex:1">'+parts.join(' \u00b7 ')+'</span>'+add+'</div>';
   var rows=own.map(function(it){return vendRow(it,data,today);}).join('')||'<div style="font-size:12px;color:var(--t3);padding:12px 2px;border-top:1px solid var(--bdr)">No projects yet. '+(data?'Set the Team field on an epic in Jira, or add one above.':'Loading from Jira\u2026')+'</div>';
+  var dOpen=!!(window._vendDone||{})[vid];var doneBlock=doneL.length?'<div onclick="vendDoneToggle(\''+vid+'\')" style="font-size:11px;color:var(--t3);padding:8px 2px;cursor:pointer;border-bottom:1px solid var(--bdr)">'+(dOpen?'\u25be':'\u25b8')+' Completed ('+doneL.length+')</div>'+(dOpen?doneL.map(function(it){return vendRow(it,data,today);}).join(''):''):'';
   var viaOpen=!!(window._vendVia||{})[vid];
   var viaBlock=via.length?'<div onclick="vendViaToggle(\''+vid+'\')" style="font-size:11px;color:var(--t3);padding:8px 2px;cursor:pointer;border-bottom:1px solid var(--bdr)">'+(viaOpen?'\u25be':'\u25b8')+' Also via engineers ('+via.length+')</div>'+(viaOpen?via.map(function(it){return vendRow(it,data,today);}).join(''):''):'';
-  return '<div style="margin-bottom:24px">'+head+'<div style="border-top:1px solid var(--bdr);margin-top:6px">'+rows+viaBlock+'</div></div>';
+  return '<div style="margin-bottom:28px">'+head+'<div style="margin-top:8px"></div><div style="border-top:1px solid var(--bdr)">'+rows+doneBlock+viaBlock+'</div></div>';
 }
-function vendRow(it,data,today){
+function vendRow(it,data,today,detailOnly){
   var s=data&&data.stats&&data.stats[it.key],k=it.key||it.name,open=!!(window._vendOpen||{})[k],done=it.status==='done';
   var due=it.due&&/^\d{4}-\d\d-\d\d/.test(it.due)?it.due.slice(0,10):'',over=due&&due<today&&!done;
   var stCol=it.status==='blocked'?'var(--red)':it.status==='at-risk'?'var(--amb)':(it.status==='in-progress'||it.status==='on-track')?'var(--blu)':it.status==='done'?'var(--grn)':'var(--t3)';
@@ -1251,15 +1308,15 @@ function vendRow(it,data,today){
   var names=s?Object.keys(s.asg||{}).filter(function(n){return !vendRemoved(n);}).sort(function(a,b){return s.asg[b]-s.asg[a];}).map(function(n){return n.split(' ')[0];}):[];
   var who=names.slice(0,3).join(', ')+(names.length>3?' +'+(names.length-3):'');
   var meta=(it.key?it.key:'')+(it.ws?' \u00b7 '+it.ws:'')+(due?' \u00b7 '+(over?'overdue ':'due ')+due.slice(5):'');
-  var bar=pct!=null?'<div title="'+s.d+' of '+s.t+(s.trunc?'+':'')+' issues done" style="display:flex;align-items:center;gap:6px;width:130px;flex-shrink:0"><div style="flex:1;height:4px;background:var(--s2);border-radius:99px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:var(--grn)"></div></div><span style="font-family:var(--mono);font-size:10px;color:var(--t2);width:30px;text-align:right">'+pct+'%</span></div>':'<div style="width:130px;flex-shrink:0"></div>';
+  var bar='<div title="Issues in this project: '+(s?s.d+' done of '+s.t+(s.trunc?'+':''):'')+'" style="width:130px;flex-shrink:0;font-size:11px;color:var(--t2)">'+(s&&s.t?(s.t-s.d)+' open <span style="color:var(--t3)">\u00b7 '+s.d+' done</span>':'')+'</div>';
   var rowHtml='<div onclick="vendToggle(\''+String(k).replace(/'/g,"\\'")+'\')" style="display:flex;align-items:center;gap:14px;padding:9px 2px;border-bottom:1px solid var(--bdr);cursor:pointer"><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+it.name+'</div><div style="font-size:10px;color:'+(over?'var(--red)':'var(--t3)')+'">'+meta+'</div></div><span style="width:104px;flex-shrink:0;font-size:11px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:'+stCol+'">'+(it.jiraStatus&&it.jiraOnly?it.jiraStatus:stLbl(it.status))+'</span>'+bar+'<span style="width:150px;flex-shrink:0;font-size:11px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+who+'</span><span style="width:10px;color:var(--t3);font-size:10px">'+(open?'\u25be':'\u25b8')+'</span></div>';
-  if(!open)return rowHtml;
+  if(!open&&!detailOnly)return rowHtml;
   var tk=function(arr,col){return arr.slice(0,4).map(function(x){return '<a href="'+JIRA+'/browse/'+x[0]+'" target="_blank" style="display:flex;gap:8px;align-items:baseline;padding:2px 0;text-decoration:none;font-size:11px;color:var(--t)"><span style="font-family:var(--mono);font-size:9px;color:'+col+';flex-shrink:0">'+x[0]+'</span><span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+x[1]+'</span><span style="font-size:9px;color:var(--t3);flex-shrink:0">'+(x[3]&&!vendRemoved(x[3])?x[3].split(' ')[0]+' \u00b7 ':'')+vendAgo(x[2])+'</span></a>';}).join('');};
   var lab=function(t,c){return '<div style="font-size:9px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:'+c+';margin-bottom:3px">'+t+'</div>';};
   var left=s&&s.wk&&s.wk.length?lab('In progress ('+s.ip+')','var(--t3)')+tk(s.wk,'var(--acc)'):'<div style="font-size:11px;color:var(--t3)">'+(s?'Nothing in progress':(it.key?'Refresh from Jira for progress':'No Jira key'))+'</div>';
   var right=s&&s.dn&&s.dn.length?lab('Done recently ('+s.dc+')','var(--grn)')+tk(s.dn,'var(--grn)'):'';
   var foot='<div style="grid-column:1/-1;font-size:10px;color:var(--t3);display:flex;gap:12px;align-items:center">'+(s&&s.t?'<span>'+s.d+' of '+s.t+(s.trunc?'+':'')+' issues done'+(s.bl?' \u00b7 <span style="color:var(--red)">'+s.bl+' blocked</span>':'')+'</span>':'')+(s&&s.upd?'<span>updated '+vendAgo(s.upd)+'</span>':'')+'<span>'+it.src+'</span>'+(it.key?'<a href="'+JIRA+'/browse/'+it.key+'" target="_blank" style="color:var(--acc);text-decoration:none">Open in Jira \u2197</a><span onclick="event.stopPropagation();vendHide(\''+it.key+'\')" style="cursor:pointer">Remove from team</span>':'')+'</div>';
-  return rowHtml+'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;padding:8px 2px 14px;border-bottom:1px solid var(--bdr)">'+'<div>'+left+'</div><div>'+right+'</div>'+foot+'</div>';
+  return (detailOnly?'':rowHtml)+'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;padding:8px 16px 14px;border-bottom:1px solid var(--bdr)">'+'<div>'+left+'</div><div>'+right+'</div>'+foot+'</div>';
 }
 function vendCopy(){
   var data=vendData(),vids=vendFilterIds();if(!vids.length)vids=VENDORS.map(function(v){return v.id;});var lines=[];
@@ -1706,13 +1763,13 @@ function switchTeamSubview(sub){
 // ── Engineer ticket breakdown (Jira) ──
 function renderEngProgressGrid(){
   const et=window.engTickets||{};
-  const withTk=tvDevs().filter(d=>et[d.id]&&et[d.id].tickets&&et[d.id].tickets.length).map(d=>({d:d,s:engStats(et[d.id]),rec:et[d.id]})).sort((a,b)=>b.s.tot-a.s.tot);
-  const noTk=tvDevs().filter(d=>!(et[d.id]&&et[d.id].tickets&&et[d.id].tickets.length));
-  const card=(d,s,rec)=>{var sc=capScore(d);var L=devLoad(d.id);var C=capCfg();var col=sc.total>C.busy?'var(--red)':sc.total>=C.room?'var(--amb)':sc.total>=C.free?'var(--acc)':'var(--grn)';var sig=Math.round(sc.total)+'% of capacity'+(L.n>0?' \u00b7 '+L.n+' in flight':'');var load=sc.total<C.free?0:sc.total;var barW=Math.min(100,Math.max(4,Math.round(sc.total)));return '<div class="eng-card" onclick="openTeamDevDetail(\''+d.id+'\')"><div style="display:flex;align-items:center;gap:9px;margin-bottom:9px">'+avEl(d,32)+'<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+d.name+(leadOfDev(d.id)?' <span style="font-size:9px;font-weight:500;color:var(--t3)" title="Also a project lead">\u25c6 Lead</span>':'')+'</div><div style="font-size:10px;margin-top:1px;color:'+(load===0?'var(--grn)':'var(--t2)')+'">'+sig+'</div></div></div><div style="height:5px;background:var(--s2);border-radius:99px;overflow:hidden"><div style="width:'+barW+'%;height:100%;background:'+col+'"></div></div></div>';};
+  const withTk=gridDevs().filter(d=>et[d.id]&&et[d.id].tickets&&et[d.id].tickets.length).map(d=>({d:d,s:engStats(et[d.id]),rec:et[d.id]})).sort((a,b)=>b.s.tot-a.s.tot);
+  const noTk=gridDevs().filter(d=>!(et[d.id]&&et[d.id].tickets&&et[d.id].tickets.length));
+  const card=(d,s,rec)=>{var sc=capScore(d);var L=devLoad(d.id);var C=capCfg();var col=sc.total>C.busy?'var(--red)':sc.total>=C.room?'var(--amb)':sc.total>=C.free?'var(--acc)':'var(--grn)';var sig=Math.round(sc.total)+'% of capacity'+(L.n>0?' \u00b7 '+L.n+' in flight':'');var load=sc.total<C.free?0:sc.total;var barW=Math.min(100,Math.max(4,Math.round(sc.total)));return '<div class="eng-card" onclick="openTeamDevDetail(\''+d.id+'\')"><div style="display:flex;align-items:center;gap:9px;margin-bottom:9px">'+avEl(d,32)+'<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+d.name+vTag(d)+(leadOfDev(d.id)?' <span style="font-size:9px;font-weight:500;color:var(--t3)" title="Also a project lead">\u25c6 Lead</span>':'')+'</div><div style="font-size:10px;margin-top:1px;color:'+(load===0?'var(--grn)':'var(--t2)')+'">'+sig+'</div></div></div><div style="height:5px;background:var(--s2);border-radius:99px;overflow:hidden"><div style="width:'+barW+'%;height:100%;background:'+col+'"></div></div></div>';};
   withTk.sort(function(a,b){return capScore(b.d).total-capScore(a.d).total;});const cards=withTk.map(x=>card(x.d,x.s,x.rec)).join('');
-  const others=noTk.length?'<div style="grid-column:1/-1;font-size:10px;color:var(--t3);margin:6px 0 2px">No tickets</div>'+noTk.map(d=>{const pct=Math.round(capScore(d).total);return '<div class="eng-card eng-card-muted" onclick="openTeamDevDetail(\''+d.id+'\')"><div style="display:flex;align-items:center;gap:9px">'+avEl(d,28)+'<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+d.name+'</div><div style="font-size:10px;color:var(--t3)">'+(d.role||'Engineer')+(pct?' · '+pct+'% of capacity':'')+'</div></div></div></div>';}).join(''):'';
+  const others=noTk.length?'<div style="grid-column:1/-1;font-size:10px;color:var(--t3);margin:6px 0 2px">No tickets</div>'+noTk.map(d=>{const pct=Math.round(capScore(d).total);return '<div class="eng-card eng-card-muted" onclick="openTeamDevDetail(\''+d.id+'\')"><div style="display:flex;align-items:center;gap:9px">'+avEl(d,28)+'<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+d.name+vTag(d)+'</div><div style="font-size:10px;color:var(--t3)">'+(d.role||'Engineer')+(pct?' · '+pct+'% of capacity':'')+'</div></div></div></div>';}).join(''):'';
   const legend='<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:14px;font-size:10px;color:var(--t2)">'+[['Done','var(--grn)'],['Active','var(--acc)'],['QA','#7C3AED'],['To Do','var(--t3)']].map(([l,c])=>'<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:2px;background:'+c+'"></span>'+l+'</span>').join('')+'</div>';
-  return teamFilterChips()+vendPanels()+'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px">'+cards+others+'</div>';
+  return teamFilterChips()+'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px">'+cards+others+'</div>'+vendPanels();
 }
 // ── Engineer ticket breakdown (Jira) ──
 function tkCat(st){st=(st||'').toLowerCase().trim();if(st==='done'||st==='ready for release'||st==='closed'||st==='resolved'||st==='released'||st==='complete'||st==='completed')return 'done';if(st.indexOf('qa')>=0||st.indexOf('review - qa')>=0||st.indexOf('testing')>=0)return 'qa';if(st.indexOf('block')>=0||st.indexOf('hold')>=0||st.indexOf('impediment')>=0)return 'blocked';if(st==='to do'||st.indexOf('ready for dev')>=0||st==='backlog'||st==='open'||st==='new'||st.indexOf('selected for dev')>=0||st==='ready'||st==='reopened'||st==='ready for development')return 'todo';return 'active';}function tkStateWeight(st){var c=tkCat(st);return c==='active'?1:c==='qa'?0.5:c==='blocked'?0.5:c==='todo'?0.35:0;}
