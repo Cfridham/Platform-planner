@@ -788,7 +788,7 @@ function projProg(pid){var m=window.__projProg;if(!m){try{m=window.__projProg=JS
 function toggleListGroup(k){var m=window._plOpen=window._plOpen||{};m[k]=!(k in m?m[k]:window._plDef&&window._plDef[k]);renderBoard();}
 function plInfo(p){
   var today=new Date().toISOString().slice(0,10),done=p.status==='done',od=!done&&p.deadline&&p.deadline<today;
-  var mems=assignments[p.id]||[],needs=!done&&!mems.length&&!(p.ext&&p.ext.length)&&p.status!=='planned';
+  var mems=assignments[p.id]||[],needs=!done&&!mems.length&&!(p.sig&&p.sig.length)&&p.status!=='planned';
   var rank=done?5:p.status==='blocked'?0:od?1:p.status==='at-risk'?2:needs?3:4;
   return {done:done,od:od,mems:mems,needs:needs,rank:rank,days:od?Math.round((Date.now()-Date.parse(p.deadline))/864e5):0};
 }
@@ -796,12 +796,14 @@ function plRow(p){
   var I=plInfo(p),esc=function(t){return String(t).replace(/</g,'&lt;');};
   var stCol=(p.status==='blocked'||I.od)?'var(--red)':p.status==='at-risk'?'var(--amb)':I.done?'var(--t3)':'var(--grn)';
   var state=I.done?'':p.status==='blocked'?'Blocked':I.od?'Overdue':p.status==='at-risk'?'At risk':'';
-  var avs=I.mems.slice(0,3).map(function(a,i){var d=devs.find(function(x){return x.id===a.devId;});if(!d)return '';var c=gc(d.colorIdx);return '<span class="pc-av'+(a.src==='plan'?' plan-av':'')+'" style="'+(d.avatar?'':'background:'+c.bg+';color:'+c.t)+';margin-left:'+(i?-6:0)+'px" title="'+esc(d.name)+' · '+a.pct+'%">'+(d.avatar?'<img src="'+d.avatar+'" alt="">':ini(d.name))+'</span>';}).join('')+(I.mems.length>3?'<span class="pc-av pc-av-more" style="margin-left:-6px">+'+(I.mems.length-3)+'</span>':'');
-  var _ext=(!avs&&p.ext&&p.ext.length&&!I.done)?'<span style="font-size:11px;color:var(--t2)" title="Working on it in Jira but not on your roster">'+p.ext.slice(0,2).map(function(n){var t=String(n).split(' ');return esc(t[0]+(t[1]?' '+t[t.length-1][0]+'.':''));}).join(', ')+(p.ext.length>2?' +'+(p.ext.length-2):'')+' <span style="color:var(--t3)">· outside roster</span></span>':'';
-  var people=avs||_ext||(I.needs?'<span class="pl-flag" style="background:#fef3c7;color:#92400e">Needs people</span>':'<span style="font-size:11px;color:var(--t3)">—</span>');
+  var _M=I.mems.slice();(p.sig||[]).forEach(function(id){if(!_M.some(function(a){return a.devId===id;}))_M.push({devId:id,pct:0,src:'jira'});});
+  var avs=_M.slice(0,4).map(function(a,i){var d=devs.find(function(x){return x.id===a.devId;});if(!d)return '';var c=gc(d.colorIdx);return '<span class="pc-av'+(a.src==='plan'?' plan-av':'')+'" style="'+(d.avatar?'':'background:'+c.bg+';color:'+c.t)+';margin-left:'+(i?-6:0)+'px" title="'+esc(d.name)+(a.src==='jira'?' · has tickets on this in Jira':' · '+a.pct+'%')+'">'+(d.avatar?'<img src="'+d.avatar+'" alt="">':ini(d.name))+'</span>';}).join('')+(_M.length>4?'<span class="pc-av pc-av-more" style="margin-left:-6px">+'+(_M.length-4)+'</span>':'');
+  var _ext='';
+  var people=((avs||'')+(_ext||''))||(I.needs?'<span class="pl-flag" style="background:#fef3c7;color:#92400e">Needs people</span>':'<span style="font-size:11px;color:var(--t3)">—</span>');
   var L=projLeads(p),lead=L.length?'<span style="color:var(--t)">◆ '+L.map(function(l){return esc(l.name);}).join(', ')+'</span>':'<span style="color:var(--t3)">—</span>';
   var pr=projProg(p.id),prog='<div style="font-size:11px;color:var(--t3)">—</div>';
   if(I.done)prog='<div style="font-size:11px;color:var(--t3)">Completed</div>';
+  else if(!pr&&p.openN>0)prog='<div style="font-size:12px;color:var(--t)">'+p.openN+' open</div>';
   else if(pr){var _o=pr.ip+pr.bl+pr.td;if(_o>0)prog='<div style="font-size:12px;color:var(--t)">'+_o+' open</div><div style="font-size:11px;color:var(--t3);margin-top:2px">'+(pr.ip+pr.bl)+' active'+(pr.bl?' · <span style=\"color:var(--red)\">'+pr.bl+' blocked</span>':'')+'</div>';}
   var due='<div style="font-size:12px;color:var(--t3)">'+(p.quarter||'—')+'</div>';
   if(I.done){var pd=projDone(p);due='<div style="font-size:12px;color:var(--t2)">✓ '+(pd?(pd.approx?'~':'')+pd.date.slice(5):'')+'</div>';}
@@ -970,7 +972,7 @@ function velType(n){n=String(n||'').toLowerCase();if(n.indexOf('sub')>=0)return 
 function velInc(it,rule){var t=it[2];if(t==='Epic')return false;if(rule==='all')return true;if(rule==='nosub')return t!=='Sub'||it[6]===0;if(rule==='strict')return t!=='Sub';return t==='Story'||t==='Task'||t==='Bug';}
 function velW(it,cfg){return cfg.unit==='points'?(+it[4]||0):1;}
 function velCfg(){
-  var d={period:'biweek',periods:6,rule:'nosub',labels:true,jql:'',stack:false,unit:'issues'};
+  var d={period:'biweek',periods:6,rule:'nosub',labels:true,jql:'',stack:false,unit:'points'};
   try{var c=JSON.parse(localStorage.getItem('plt_vel_cfg')||'{}');if(c.period==='week'||c.period==='biweek'||c.period==='month')d.period=c.period;if(+c.periods>=2)d.periods=Math.round(+c.periods);if(c.rule==='all'||c.rule==='nosub'||c.rule==='core'||c.rule==='strict')d.rule=c.rule;if(c.unit==='points'||c.unit==='issues')d.unit=c.unit;if(typeof c.labels==='boolean')d.labels=c.labels;if(typeof c.stack==='boolean')d.stack=c.stack;if(typeof c.jql==='string')d.jql=c.jql;}catch(e){}
   d.periods=Math.max(2,Math.min(VEL_MAXP[d.period],d.periods));
   return d;
@@ -1033,7 +1035,42 @@ function velInit(ctx,devId){
   if(!ok)st.dev=ctx==='m'?'*':(devs[0]&&devs[0].id);
   st.sel=null;velRender();
 }
-function velRender(){['m','e'].forEach(function(ctx){var el=document.getElementById('vel-'+ctx);if(el&&window._velSt[ctx])el.innerHTML=velHTML(ctx);});}
+function mxExtraHTML(){
+  var data=velData(),esc=function(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;');};
+  var card=function(title,tag,sub,body,note){return '<div class="chart-card" style="margin-bottom:12px"><div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><div class="chart-title" style="margin:0">'+title+'</div><span style="font-size:10px;font-weight:600;color:var(--acc);background:var(--s2);border-radius:99px;padding:2px 8px">'+tag+'</span></div><div style="font-size:11px;color:var(--t3);margin:2px 0 12px">'+sub+'</div>'+body+(note?'<div style="font-size:10px;color:var(--t3);margin-top:10px;line-height:1.5">'+note+'</div>':'')+'</div>';};
+  if(!data||!data.items)return card('Capacity vs. delivery','who is overloaded vs. shipping','Needs velocity data','<div style="font-size:12px;color:var(--t3)">Load velocity data above to see these sections.</div>');
+  var cfg=velCfg(),DAY=864e5,now=Date.now();
+  var anyPts=false;Object.keys(data.items).forEach(function(id){(data.items[id]||[]).forEach(function(it){if(+it[4]>0)anyPts=true;});});
+  var c2={unit:(cfg.unit==='points'&&anyPts)?'points':'issues'},U=c2.unit==='points'?'pts':'issues';
+  // 1 capacity vs delivery
+  var rows=devs.map(function(d){var done=0;(data.items[d.id]||[]).forEach(function(it){if(!velInc(it,cfg.rule))return;if(it[1]>=now-14*DAY)done+=velW(it,c2);});
+    var bl=(((window.engTickets||{})[d.id]||{}).tickets||[]).filter(function(t){return tkCat(t.st)==='blocked'&&tkFresh(t);}).length;
+    return {d:d,al:alloc(d.id),cap:d.capacity||100,done:done,bl:bl};}).filter(function(r){return r.al>0||r.done>0;}).sort(function(a,b){return b.al-a.al;});
+  var ds=rows.map(function(r){return r.done;}).sort(function(a,b){return a-b;}),med=ds.length?ds[Math.floor(ds.length/2)]:0;
+  var maxA=Math.max(100,Math.max.apply(null,rows.map(function(r){return r.al;}).concat([0]))),maxD=Math.max(1,Math.max.apply(null,ds.concat([0])));
+  var read=function(r){var lbl,cls;if(r.al>r.cap){if(r.bl>0){lbl=r.bl+' blocked ticket'+(r.bl>1?'s':'');cls='a';}else if(r.done<med*0.6){lbl='Overloaded, low output';cls='r';}else{lbl='Overloaded, delivering';cls='a';}}else if(r.al<r.cap*0.7&&r.done>=med&&r.done>0){lbl='Has room, delivering';cls='g';}else if(r.al<r.cap*0.5&&r.done<med*0.5){lbl='Has room';cls='g';}else{lbl='Healthy';cls='g';}
+    var col=cls==='r'?['var(--red)','rgba(217,45,32,.12)']:cls==='a'?['var(--amb)','rgba(217,119,6,.14)']:['var(--grn)','rgba(22,163,74,.12)'];return '<span style="font-size:11px;font-weight:500;padding:2px 9px;border-radius:99px;white-space:nowrap;color:'+col[0]+';background:'+col[1]+'">'+lbl+'</span>';};
+  var G='display:grid;grid-template-columns:150px 1fr 1fr 170px;gap:14px;align-items:center;padding:8px 0;border-top:1px solid var(--bdr);';
+  var bar=function(w,col,txt){return '<div style="display:flex;gap:8px;align-items:center"><div style="flex:1;height:8px;border-radius:99px;background:var(--s2);overflow:hidden"><div style="width:'+Math.max(0,Math.min(100,w))+'%;height:100%;background:'+col+';border-radius:99px"></div></div><span style="font-family:var(--mono);font-size:11px;min-width:34px;text-align:right">'+txt+'</span></div>';};
+  var lab='font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--t3)';
+  var capBody='<div style="'+G+'border-top:none;padding-top:0"><span style="'+lab+'">Engineer</span><span style="'+lab+'">Allocated</span><span style="'+lab+'">'+U+' done (14 days)</span><span style="'+lab+'">Read</span></div>'+
+    (rows.length?rows.map(function(r){return '<div style="'+G+'"><span style="font-size:12px;cursor:pointer" onclick="openTeamDevDetail(\''+r.d.id+'\')">'+esc(r.d.name)+'</span>'+bar(r.al/maxA*100,ac(r.al,r.cap),Math.round(r.al)+'%')+bar(r.done/maxD*100,'var(--grn)',Math.round(r.done*10)/10)+'<div>'+read(r)+'</div></div>';}).join(''):'<div style="font-size:12px;color:var(--t3);padding:8px 0">No allocations or completed work yet.</div>');
+  var capCard=card('Capacity vs. delivery','who is overloaded vs. shipping','Allocated % against '+(U==='pts'?'story points':'issues')+' finished in the last 14 days.',capBody,'“Read” is a label, not a score: over-allocated with low output often means blocked work, not slow work. Allocation is today’s figure.');
+  // 2 throughput by workstream
+  var parent={},byKey={};projects.forEach(function(p){if(p.jiraKey)byKey[String(p.jiraKey).toUpperCase()]=p;});
+  Object.keys(data.items).forEach(function(id){(data.items[id]||[]).forEach(function(it){if(it[5])parent[String(it[0]).toUpperCase()]=String(it[5]).toUpperCase();});});
+  var wsOf=function(it){var k=it[5]?String(it[5]).toUpperCase():'';for(var h=0;h<3&&k;h++){if(byKey[k])return byKey[k].workstream||'Unassigned';k=parent[k]||'';}return 'Other';};
+  var t0=new Date();t0.setHours(0,0,0,0);var end=t0.getTime()+DAY,NW=6,W={},seen={};
+  Object.keys(data.items).forEach(function(id){(data.items[id]||[]).forEach(function(it){if(!velInc(it,cfg.rule)||seen[it[0]])return;var wk=Math.floor((end-it[1])/(7*DAY));if(wk<0||wk>=NW)return;seen[it[0]]=1;var ws=wsOf(it),o=W[ws]=W[ws]||{b:[0,0,0,0,0,0],t:0};o.b[NW-1-wk]+=velW(it,c2);o.t+=velW(it,c2);});});
+  var wl=Object.keys(W).filter(function(k){return W[k].t>0;}).sort(function(a,b){return W[b].t-W[a].t;}).slice(0,8);
+  var tcard=wl.map(function(k){var o=W[k],mx=Math.max.apply(null,o.b.concat([1])),a=(o.b[0]+o.b[1]+o.b[2])/3,b=(o.b[3]+o.b[4]+o.b[5])/3;
+    var tr=a===0&&b===0?'':(b>a*1.15?['↑ rising','var(--grn)']:b<a*0.85?['↓ slowing','var(--red)']:['→ steady','var(--t3)']);
+    var bars=o.b.map(function(v,i){var h=Math.round(v/mx*36);return '<rect x="'+(2+i*20)+'" y="'+(40-h)+'" width="14" height="'+h+'" rx="1.5" fill="'+wsCol(k)+'"><title>'+v+' '+U+'</title></rect>';}).join('');
+    return '<div><div style="display:flex;justify-content:space-between;gap:6px"><b style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(k)+'</b><span style="font-family:var(--mono);font-size:11px">'+Math.round(o.t*10)/10+' '+U+'</span></div><svg viewBox="0 0 120 40" width="100%" height="48" preserveAspectRatio="none">'+bars+'</svg>'+(tr?'<div style="font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:'+tr[1]+';margin-top:2px">'+tr[0]+'</div>':'')+'</div>';}).join('');
+  var thCard=card('Throughput by workstream','where the work is going',(U==='pts'?'Story points':'Issues')+' completed per week, last 6 weeks (rolling 7-day weeks, newest on the right).',wl.length?'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px">'+tcard+'</div>':'<div style="font-size:12px;color:var(--t3)">No completed work in the last 6 weeks.</div>','Workstream comes from the project an issue belongs to; work under no tracked project is grouped as Other. Same Jira data as the velocity chart.');
+  return capCard+thCard;
+}
+function velRender(){['m','e'].forEach(function(ctx){var el=document.getElementById('vel-'+ctx);if(el&&window._velSt[ctx])el.innerHTML=velHTML(ctx);});var _x=document.getElementById('mx-extra');if(_x)try{_x.innerHTML=mxExtraHTML();}catch(e){}}
 function velHTML(ctx){
   var cfg=velCfg(),st=window._velSt[ctx]||{},team=st.dev==='*'&&ctx==='m';
   var dev=team?null:(devs.find(function(d){return d.id===st.dev;})||devs[0]);if(!team&&!dev)return '';
@@ -1670,7 +1707,7 @@ function renderTeamView(){
     '<div id="tv-heat-section" style="display:none;position:absolute;inset:0;background:var(--bg);z-index:5;overflow:auto;padding:14px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><div style="font-size:13px;font-weight:600">Team Heatmap</div><button class="btn" onclick="switchTeamSubview(\'roster\')">← Back</button></div><div id="tv-heat-content"></div></div>'+
     '<div id="tv-sig-section" style="display:none;position:absolute;inset:0;background:var(--bg);z-index:5;overflow:auto;padding:14px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><div><div style="font-size:13px;font-weight:600">Developer Capacity & Signals</div><div style="font-size:10px;color:var(--t2);margin-top:1px">Click a developer for PR details</div></div><button class="btn" onclick="switchTeamSubview(\'roster\')">← Back</button></div><div class="dash-panel" style="max-width:640px;padding:4px 14px" id="tv-sig-content"></div></div>'+
     '<div id="tv-board-section" style="display:none;position:absolute;inset:0;background:var(--bg);z-index:5;flex-direction:column"><div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px 8px;flex-shrink:0"><div><div style="font-size:13px;font-weight:600">Team load board</div><div style="font-size:10px;color:var(--t2);margin-top:1px">Developers grouped by allocation · click a card for detail</div></div><button class="btn" onclick="switchTeamSubview(\'roster\')">← Back</button></div><div id="tv-board-content" style="flex:1;overflow:hidden"></div></div>'+
-    '<div id="tv-tickets-section" style="display:none;position:absolute;inset:0;background:var(--bg);z-index:5;flex-direction:column"><div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px 8px;flex-shrink:0"><div><div style="font-size:13px;font-weight:600">All tickets by engineer</div><div style="font-size:10px;color:var(--t2);margin-top:1px">Each engineer\'s Jira tickets · click a row to expand</div></div><button class="btn" onclick="switchTeamSubview(\'roster\')">← Back</button></div><div id="tv-tickets-content" style="flex:1;overflow-y:auto;padding:6px 14px 14px"></div></div>'+
+    '<div id="tv-tickets-section" style="display:none;position:absolute;inset:0;background:var(--bg);z-index:5;flex-direction:column"><div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px 8px;flex-shrink:0"><div><div style="font-size:13px;font-weight:600">All tickets by engineer</div><div style="font-size:10px;color:var(--t2);margin-top:1px">What each engineer has in progress · click a row to expand</div></div><button class="btn" onclick="switchTeamSubview(\'roster\')">← Back</button></div><div id="tv-tickets-content" style="flex:1;overflow-y:auto;padding:6px 14px 14px"></div></div>'+
   '</div>';
   el.style.position='relative';
 }
@@ -1782,21 +1819,21 @@ function tkUpcoming(t){if(!isReadyForDev(t.st))return false;if(!t.u)return true;
 function tkShown(t){var c=tkCat(t.st);if(c==='done')return tkDoneRecent(t);if(c==='active'||c==='qa')return true;if(c==='blocked')return false;return tkUpcoming(t);}
 function ptsMode(){var et=window.engTickets||{};for(var k in et){var ts=(et[k]&&et[k].tickets)||[];for(var i=0;i<ts.length;i++)if(ts[i].p>0)return true;}return false;}
 function ptUnit(){return ptsMode()?'pts':'tickets';}
-function engStats(rec){const pm=ptsMode();const wt=t=>pm?(t.p||0):1;const ts=(rec.tickets||[]).filter(tkShown);const tot=ts.reduce((s,t)=>s+wt(t),0);const cats={done:0,active:0,qa:0,blocked:0,todo:0};ts.forEach(t=>{cats[tkCat(t.st)]+=wt(t);});const donePct=tot?Math.round(cats.done/tot*100):0;return {tot:tot,cats:cats,donePct:donePct,count:ts.length};}
+function engStats(rec,flt){const pm=ptsMode();const wt=t=>pm?(t.p||0):1;const ts=(rec.tickets||[]).filter(flt||tkShown);const tot=ts.reduce((s,t)=>s+wt(t),0);const cats={done:0,active:0,qa:0,blocked:0,todo:0};ts.forEach(t=>{cats[tkCat(t.st)]+=wt(t);});const donePct=tot?Math.round(cats.done/tot*100):0;return {tot:tot,cats:cats,donePct:donePct,count:ts.length};}
 function engBar(cats,tot){if(!tot)return '<div style="height:6px;background:var(--s2);border-radius:99px"></div>';const order=[['done','var(--grn)'],['active','var(--acc)'],['qa','#7C3AED'],['blocked','var(--red)'],['todo','var(--t3)']];return '<div style="display:flex;height:6px;border-radius:99px;overflow:hidden;background:var(--s2)">'+order.map(([k,c])=>{const w=cats[k]/tot*100;return w>0?'<div style="width:'+w+'%;background:'+c+'" title="'+k+' '+cats[k]+ptUnit()+'"></div>':'';}).join('')+'</div>';}
 function toggleEngRow(id){const el=document.getElementById('engrow-'+id);const chev=document.getElementById('engchev-'+id);if(!el)return;const open=el.style.display!=='none';el.style.display=open?'none':'block';if(chev)chev.style.transform=open?'rotate(0deg)':'rotate(180deg)';}
 function renderEngBreakdown(){
-  const et=window.engTickets||{};
-  const list=devs.map(d=>({dev:d,rec:et[d.id]})).filter(x=>x.rec&&x.rec.tickets&&x.rec.tickets.length);
-  if(!list.length)return '<div style="padding:26px;text-align:center"><div style="font-size:13px;color:var(--t2);margin-bottom:6px">No ticket breakdown yet</div><div style="font-size:11px;color:var(--t3)">Sync Jira to pull each engineer\'s tickets, or seed from an export.</div></div>';
-  list.sort((a,b)=>engStats(b.rec).tot-engStats(a.rec).tot);
+  const et=window.engTickets||{};const ipF=t=>{const c=tkCat(t.st);return (c==='active'||c==='qa')&&tkFresh(t);};
+  const list=devs.map(d=>({dev:d,rec:et[d.id]})).filter(x=>x.rec&&x.rec.tickets&&x.rec.tickets.some(ipF));
+  if(!list.length)return '<div style="padding:26px;text-align:center"><div style="font-size:13px;color:var(--t2);margin-bottom:6px">Nothing in progress</div><div style="font-size:11px;color:var(--t3)">No engineer has an active or QA ticket right now. Sync Jira to refresh.</div></div>';
+  list.sort((a,b)=>engStats(b.rec,ipF).tot-engStats(a.rec,ipF).tot);
   const asOf=(list[0].rec.asOf||'');const sprint=(list[0].rec.sprint||'');
-  const totTk=list.reduce((s,x)=>s+x.rec.tickets.filter(tkShown).length,0),totPts=list.reduce((s,x)=>s+engStats(x.rec).tot,0);
-  const legend='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px;font-size:10px;color:var(--t2)">'+[['Done','var(--grn)'],['Active','var(--acc)'],['QA','#7C3AED'],['To Do','var(--t3)']].map(([l,c])=>'<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:2px;background:'+c+'"></span>'+l+'</span>').join('')+'</div>';
+  const totTk=list.reduce((s,x)=>s+x.rec.tickets.filter(ipF).length,0),totPts=list.reduce((s,x)=>s+engStats(x.rec,ipF).tot,0);
+  const legend='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px;font-size:10px;color:var(--t2)">'+[['In progress','var(--acc)'],['QA','#7C3AED']].map(([l,c])=>'<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:2px;background:'+c+'"></span>'+l+'</span>').join('')+'</div>';
   const rows=list.map(({dev,rec})=>{
-    const s=engStats(rec);const col=ac(alloc(dev.id),dev.capacity||100);
-    const ticketRows=rec.tickets.filter(tkShown).map(t=>'<tr style="border-top:1px solid var(--bdr)"><td style="padding:6px 8px;white-space:nowrap"><a href="'+JIRA+'/browse/'+t.k+'" target="_blank" style="font-family:var(--mono);font-size:11px;color:var(--acc);text-decoration:none">'+t.k+'</a></td><td style="padding:6px 8px;font-size:11px;color:var(--t)">'+t.s+'</td><td style="padding:6px 8px;text-align:center;font-family:var(--mono);font-size:11px;color:var(--t2)">'+(t.p!=null?t.p:'–')+'</td><td style="padding:6px 8px;text-align:right">'+tkStatusBadge(t.st)+'</td></tr>').join('');
-    return '<div style="border:1px solid var(--bdr);border-radius:var(--r2);margin-bottom:8px;overflow:hidden;background:var(--sur)"><div onclick="toggleEngRow(\''+dev.id+'\')" style="display:flex;align-items:center;gap:10px;padding:11px 13px;cursor:pointer">'+avEl(dev,30)+'<div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:8px;margin-bottom:5px"><span style="font-size:12px;font-weight:600">'+dev.name+'</span><span style="font-size:11px;font-family:var(--mono);color:var(--t2)">'+s.tot+' '+ptUnit()+'</span><span style="font-size:11px;font-family:var(--mono);color:'+(s.donePct>=50?'var(--grn)':s.donePct>0?'var(--amb)':'var(--t3)')+'">'+s.donePct+'% done</span>'+'</div>'+engBar(s.cats,s.tot)+'</div><span id="engchev-'+dev.id+'" style="font-size:10px;color:var(--t3);transition:transform .15s;flex-shrink:0">▼</span></div><div id="engrow-'+dev.id+'" style="display:none;border-top:1px solid var(--bdr)"><table style="width:100%;border-collapse:collapse"><thead><tr><th style="text-align:left;padding:6px 8px;font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--t3);font-weight:600">Key</th><th style="text-align:left;padding:6px 8px;font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--t3);font-weight:600">Summary</th><th style="text-align:center;padding:6px 8px;font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--t3);font-weight:600">Pts</th><th style="text-align:right;padding:6px 8px;font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--t3);font-weight:600">Status</th></tr></thead><tbody>'+ticketRows+'</tbody></table></div></div>';
+    const s=engStats(rec,ipF);const col=ac(alloc(dev.id),dev.capacity||100);
+    const ticketRows=rec.tickets.filter(ipF).map(t=>'<tr style="border-top:1px solid var(--bdr)"><td style="padding:6px 8px;white-space:nowrap"><a href="'+JIRA+'/browse/'+t.k+'" target="_blank" style="font-family:var(--mono);font-size:11px;color:var(--acc);text-decoration:none">'+t.k+'</a></td><td style="padding:6px 8px;font-size:11px;color:var(--t)">'+t.s+'</td><td style="padding:6px 8px;text-align:center;font-family:var(--mono);font-size:11px;color:var(--t2)">'+(t.p!=null?t.p:'–')+'</td><td style="padding:6px 8px;text-align:right">'+tkStatusBadge(t.st)+'</td></tr>').join('');
+    return '<div style="border:1px solid var(--bdr);border-radius:var(--r2);margin-bottom:8px;overflow:hidden;background:var(--sur)"><div onclick="toggleEngRow(\''+dev.id+'\')" style="display:flex;align-items:center;gap:10px;padding:11px 13px;cursor:pointer">'+avEl(dev,30)+'<div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:8px;margin-bottom:5px"><span style="font-size:12px;font-weight:600">'+dev.name+'</span><span style="font-size:11px;font-family:var(--mono);color:var(--t2)">'+s.tot+' '+ptUnit()+'</span><span style="font-size:11px;color:var(--t3)">'+s.count+' in progress</span>'+'</div>'+engBar(s.cats,s.tot)+'</div><span id="engchev-'+dev.id+'" style="font-size:10px;color:var(--t3);transition:transform .15s;flex-shrink:0">▼</span></div><div id="engrow-'+dev.id+'" style="display:none;border-top:1px solid var(--bdr)"><table style="width:100%;border-collapse:collapse"><thead><tr><th style="text-align:left;padding:6px 8px;font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--t3);font-weight:600">Key</th><th style="text-align:left;padding:6px 8px;font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--t3);font-weight:600">Summary</th><th style="text-align:center;padding:6px 8px;font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--t3);font-weight:600">Pts</th><th style="text-align:right;padding:6px 8px;font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--t3);font-weight:600">Status</th></tr></thead><tbody>'+ticketRows+'</tbody></table></div></div>';
   }).join('');
   return '<div style="max-width:820px;margin:0 auto"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div style="font-size:12px;color:var(--t2)"><b>'+list.length+'</b> engineers · <b>'+totTk+'</b> tickets'+(ptsMode()?' · <b>'+totPts+'</b> pts':'')+'</div>'+(asOf?'<div style="font-size:10px;color:var(--t3)">as of '+asOf+'</div>':'')+'</div>'+legend+rows+'</div>';
 }
@@ -2020,7 +2057,7 @@ function openAvailabilityForecast(){
     return '<div onclick="closeModal();flowToDev(\''+r.d.id+'\')" style="display:flex;align-items:center;gap:9px;padding:8px 8px;border-radius:var(--r);cursor:pointer">'+avEl(r.d,26)+'<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+r.d.name+(r.d.offshore?' <span class="off-tag">off</span>':'')+(r.blocked?' <span style="font-size:10px;font-weight:500;color:var(--red)">'+r.blocked+' blocked</span>':'')+'</div><div style="font-size:10px;color:var(--t3)">'+bits.join(' · ')+'</div></div><span style="font-size:10px;font-family:var(--mono);color:'+c+'">'+r.a+'%</span><span title="'+confTxt[r.conf]+'" style="width:6px;height:6px;border-radius:99px;background:'+confCol[r.conf]+';flex-shrink:0"></span><span style="font-size:11px;font-weight:600;font-family:var(--mono);color:'+(r.remaining===0||r.eta===0?'var(--grn)':r.eta!=null&&r.eta<=7?'var(--amb)':'var(--t2)')+';min-width:58px;text-align:right">'+etaLabel(r)+'</span></div>';};
   const grp=(title,arr,col,note)=>arr.length?'<div style="margin-bottom:14px"><div style="font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:'+col+';margin-bottom:4px">'+title+' ('+arr.length+')</div>'+(note?'<div style="font-size:10px;color:var(--t3);margin-bottom:4px">'+note+'</div>':'')+arr.sort((a,b)=>(a.eta==null?1e9:a.eta)-(b.eta==null?1e9:b.eta)||a.a-b.a).map(row).join('')+'</div>':'';
   // where they could go: active projects with nobody on them
-  const need=projects.filter(p=>!p.archived&&p.status!=='done'&&p.status!=='planned'&&!(assignments[p.id]||[]).length&&!(p.ext&&p.ext.length)).sort((a,b)=>urgScore(a)-urgScore(b)).slice(0,5);
+  const need=projects.filter(p=>!p.archived&&p.status!=='done'&&p.status!=='planned'&&!(assignments[p.id]||[]).length&&!(p.sig&&p.sig.length)).sort((a,b)=>urgScore(a)-urgScore(b)).slice(0,5);
   const needHTML=need.length?'<div style="margin-top:6px;padding-top:12px;border-top:1px solid var(--bdr)"><div style="font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--amb);margin-bottom:4px">Projects waiting for people ('+need.length+')</div>'+need.map(p=>'<div onclick="closeModal();setView(\'board\');setTimeout(()=>selProject(\''+p.id+'\'),80)" style="display:flex;align-items:center;gap:8px;padding:6px 8px;cursor:pointer;font-size:12px"><span style="width:7px;height:7px;border-radius:99px;background:'+wsCol(p.workstream||'Unassigned')+'"></span><span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+String(p.name).replace(/</g,'&lt;')+'</span><span style="font-size:10px;color:var(--t3)">'+(p.workstream||'')+'</span></div>').join('')+'</div>':'';
   const body=grp('Available now',nowB,'var(--grn)','Little or no active work — open for new work.')+grp('Freeing up within a week',wk,'var(--amb)')+grp('1–2 weeks out',two,'var(--blu)')+grp('2+ weeks out',later,'var(--t2)')+grp('No estimate yet',unk,'var(--t3)','No finished work or merged PRs to estimate pace from, or only blocked tickets left.')+needHTML;
   document.getElementById('mc').innerHTML='<div class="backdrop" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:540px;max-height:86vh"><div class="mh"><div class="mt">Who\'s freeing up</div><button class="ib" onclick="closeModal()"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="1" y1="1" x2="11" y2="11"/><line x1="11" y1="1" x2="1" y2="11"/></svg></button></div><div style="overflow-y:auto;padding:12px 14px"><div style="font-size:11px;color:var(--t2);margin-bottom:12px;line-height:1.5">Estimated from each person\'s open Jira work (not-started counts fully, in progress about half, in QA about a fifth), their open PRs on GitHub (work close to landing), and their pace over the last 3 weeks. Blocked tickets are left out. The dot shows confidence: green = solid history, amber = rough. A planning estimate, not a promise.</div>'+body+'</div></div></div>';
@@ -2122,7 +2159,7 @@ function renderMetricsView(){
     '<div style="font-size:18px;font-weight:700;margin-bottom:2px">Team metrics</div>'+
     '<div style="font-size:11px;color:var(--t3);margin-bottom:16px">'+(km.asOf?'as of '+km.asOf:'sync from Jira to populate')+'</div>'+
     summary+tiles+
-    '<div class="chart-card" id="mx-vel" style="margin-bottom:12px"><div id="vel-m"></div></div>'+
+    '<div class="chart-card" id="mx-vel" style="margin-bottom:12px"><div id="vel-m"></div></div>'+'<div id="mx-extra">'+(function(){try{return mxExtraHTML();}catch(e){return '';}})()+'</div>'+
     '<div style="font-size:10px;color:var(--t3);margin-top:10px;line-height:1.5">Completed counts come from Jira resolution dates. \u201cIn progress\u201d counts only tickets touched in the last 30 days; older ones are tucked away under \u201cinclude older\u201d.</div>'+
   '</div>';
 }
@@ -2953,23 +2990,35 @@ async function loadProjectExternals(headers,matchDev){
   var live=projects.filter(function(p){return p.jiraKey&&!p.archived&&p.status!=='done';});
   var byKey={};live.forEach(function(p){byKey[String(p.jiraKey).toUpperCase()]=p;});
   var keys=Object.keys(byKey);if(!keys.length)return;
-  var acc={};
+  var acc={},childOf={};
   for(var i=0;i<keys.length;i+=40){
     var ks=keys.slice(i,i+40).join(',');
-    var jql='(key in ('+ks+') OR parent in ('+ks+')) AND statusCategory != Done';
+    var jql='(key in ('+ks+') OR parent in ('+ks+')) AND (statusCategory != Done OR resolutiondate >= -30d)';
     var tok=null;
     for(var j=0;j<4;j++){
-      var r=await jFetch(JIRA+'/rest/api/3/search/jql?jql='+encodeURIComponent(jql)+'&fields=assignee,parent,issuetype&maxResults=100'+(tok?'&nextPageToken='+encodeURIComponent(tok):''),{headers:headers});
+      var r=await jFetch(JIRA+'/rest/api/3/search/jql?jql='+encodeURIComponent(jql)+'&fields=assignee,parent,issuetype,status,resolutiondate&maxResults=100'+(tok?'&nextPageToken='+encodeURIComponent(tok):''),{headers:headers});
       if(!r.ok)break;var d=await r.json();
       (d.issues||[]).forEach(function(is){
         var f=is.fields||{};var K=String(is.key).toUpperCase();var pk=byKey[K]?K:String((f.parent&&f.parent.key)||'').toUpperCase();if(!byKey[pk])return;
-        var o=acc[pk]=acc[pk]||{n:0,ext:{}};if(!(f.issuetype&&/epic/i.test(f.issuetype.name||'')))o.n++;
-        if(f.assignee&&f.assignee.displayName&&!matchDev(f.assignee))o.ext[f.assignee.displayName]=(o.ext[f.assignee.displayName]||0)+1;
+        var o=acc[pk]=acc[pk]||{n:0,ext:{}};if(!byKey[K])childOf[K]=pk;var _isDone=!!(f.resolutiondate)||(f.status&&f.status.statusCategory&&f.status.statusCategory.key==='done');if(!_isDone&&!(f.issuetype&&/epic/i.test(f.issuetype.name||'')))o.n++;
+        var _md=f.assignee&&matchDev(f.assignee);if(_md){var _e=o.ext[_md.id]=o.ext[_md.id]||{o:0,d:0};if(_isDone)_e.d++;else _e.o++;}
       });
       if(d.isLast||!d.nextPageToken)break;tok=d.nextPageToken;
     }
   }
-  live.forEach(function(p){var o=acc[String(p.jiraKey).toUpperCase()];p.openN=o?o.n:0;p.ext=o?Object.keys(o.ext).sort(function(a,b){return o.ext[b]-o.ext[a];}).slice(0,4):[];});
+  var ck=Object.keys(childOf).slice(0,600);
+  for(var c=0;c<ck.length;c+=40){
+    var cj='parent in ('+ck.slice(c,c+40).join(',')+') AND (statusCategory != Done OR resolutiondate >= -30d)',ctok=null;
+    for(var cp=0;cp<3;cp++){
+      try{
+        var cr=await jFetch(JIRA+'/rest/api/3/search/jql?jql='+encodeURIComponent(cj)+'&fields=assignee,parent,status,resolutiondate&maxResults=100'+(ctok?'&nextPageToken='+encodeURIComponent(ctok):''),{headers:headers});
+        if(!cr.ok)break;var cd=await cr.json();
+        (cd.issues||[]).forEach(function(is){var f=is.fields||{},pk=childOf[String((f.parent&&f.parent.key)||'').toUpperCase()];if(!pk||!acc[pk])return;var md=f.assignee&&matchDev(f.assignee);if(!md)return;var dn=!!f.resolutiondate||(f.status&&f.status.statusCategory&&f.status.statusCategory.key==='done');var e=acc[pk].ext[md.id]=acc[pk].ext[md.id]||{o:0,d:0};if(dn)e.d++;else e.o++;});
+        if(cd.isLast||!cd.nextPageToken)break;ctok=cd.nextPageToken;
+      }catch(e){break;}
+    }
+  }
+  live.forEach(function(p){var o=acc[String(p.jiraKey).toUpperCase()];p.openN=o?o.n:0;var _n=o?Object.keys(o.ext).sort(function(a,b){return (o.ext[b].o-o.ext[a].o)||(o.ext[b].d-o.ext[a].d);}).slice(0,5):[];p.sig=_n;p.sigDone=o?_n.filter(function(n){return !o.ext[n].o;}):[];p.ext=[];p.extDone=[];});
   save();
 }
 function spPick(flds){return flds.find(x=>/^story points?$/i.test((x.name||'').trim()))||flds.find(x=>/story points?(?! estimate)/i.test(x.name||'')&&!/estimate/i.test(x.name||''))||flds.find(x=>/story point estimate/i.test(x.name||''))||flds.find(x=>/story points?/i.test(x.name||''));}
@@ -3012,22 +3061,23 @@ async function autoAssignFromJira(silent){
     }
     // ---- sub-tasks: only list them for an engineer when the parent story belongs to someone else ----
     const isSub=function(f){return !!(f&&f.issuetype&&(f.issuetype.subtask||/sub-?task/i.test(f.issuetype.name||'')));};
-    const parentAsg={};
+    const parentAsg={},parentEpic={};
     try{
       const pk={};issues.forEach(function(is){var f=is.fields;if(isSub(f)&&f.parent&&f.parent.key)pk[f.parent.key]=1;});
       const pks=Object.keys(pk);
       for(let i=0;i<pks.length;i+=80){
-        const pr=await jFetch(JIRA+'/rest/api/3/search/jql?jql='+encodeURIComponent('key in ('+pks.slice(i,i+80).join(',')+')')+'&fields=assignee&maxResults=100',{headers:headers});
-        if(!pr.ok)break;const pd=await pr.json();(pd.issues||[]).forEach(function(p){parentAsg[p.key]=(p.fields&&p.fields.assignee&&p.fields.assignee.accountId)||'';});
+        const pr=await jFetch(JIRA+'/rest/api/3/search/jql?jql='+encodeURIComponent('key in ('+pks.slice(i,i+80).join(',')+')')+'&fields=assignee,parent'+(epicField?','+epicField:'')+'&maxResults=100',{headers:headers});
+        if(!pr.ok)break;const pd=await pr.json();(pd.issues||[]).forEach(function(p){parentAsg[p.key]=(p.fields&&p.fields.assignee&&p.fields.assignee.accountId)||'';var _pf=p.fields||{},_pe=(_pf.parent&&_pf.parent.key)||(epicField&&_pf[epicField])||'';if(_pe)parentEpic[p.key]=String(_pe).toUpperCase();});
       }
     }catch(e){console.warn('Sub-task parent lookup failed',e);}
+    const resolveEpic=function(f){var pk=(f.parent&&f.parent.key)||'';if(pk&&isSub(f)&&parentEpic[pk])return parentEpic[pk];return pk||(epicField&&f[epicField])||'';};
     const ownSub=function(f){return isSub(f)&&f.parent&&f.assignee&&parentAsg[f.parent.key]&&parentAsg[f.parent.key]===f.assignee.accountId;};
     issues.forEach(is=>{const f=is.fields;if(!f)return;const dev=matchDev(f.assignee);if(dev&&f.assignee&&f.assignee.avatarUrls){const av=f.assignee.avatarUrls['48x48']||f.assignee.avatarUrls['32x32'];if(av)dev.avatar=av;}
       const stName=(f.status&&f.status.name)||'';
       const pts=(spField&&typeof f[spField]==='number'&&!isNaN(f[spField]))?f[spField]:null;
-      if(dev&&!(f.issuetype&&/epic/i.test(f.issuetype.name||''))&&!ownSub(f)){const _ek=(f.parent&&f.parent.key)||(epicField&&f[epicField])||'';engT[dev.id]=engT[dev.id]||{tickets:[],rollover:0,asOf:todayStr,sprint:'Live'};engT[dev.id].tickets.push({k:is.key,s:f.summary||'',p:pts,st:stName,it:(f.issuetype&&f.issuetype.name)||'',u:f.updated||'',r:f.resolutiondate||'',e:_ek?String(_ek).toUpperCase():''});}
+      if(dev&&!(f.issuetype&&/epic/i.test(f.issuetype.name||''))&&!ownSub(f)){const _ek=resolveEpic(f);engT[dev.id]=engT[dev.id]||{tickets:[],rollover:0,asOf:todayStr,sprint:'Live'};engT[dev.id].tickets.push({k:is.key,s:f.summary||'',p:pts,st:stName,it:(f.issuetype&&f.issuetype.name)||'',u:f.updated||'',r:f.resolutiondate||'',e:_ek?String(_ek).toUpperCase():''});}
       else if(!dev&&f.assignee&&f.assignee.displayName){unmatchedA[f.assignee.displayName]=1;}
-      let epicKey=(f.parent&&f.parent.key)||(epicField&&f[epicField])||null;
+      let epicKey=resolveEpic(f)||null;
       if(epicKey)keyEpic[is.key]=String(epicKey).toUpperCase();
       const _addOther=function(){if(dev&&!ownSub(f)&&!(f.issuetype&&/epic/i.test(f.issuetype.name||''))){const _c=tkCat(stName);const w=((_c==='active'||_c==='qa'||_c==='blocked')&&tkFresh({u:f.updated}))?((pts!=null&&pts>0)?pts:3)*tkStateWeight(stName):0;if(w>0){const o=otherW[dev.id]=otherW[dev.id]||{w:0,n:0};o.w+=w;o.n++;}}};
       if(!epicKey){noEpic++;_addOther();return;}
@@ -3042,7 +3092,7 @@ async function autoAssignFromJira(silent){
       var PARK_DAYS=+(localStorage.getItem('plt_park_overdue_days')||90)||90;
       if(localStorage.getItem('plt_autopark')!=='0'){
         var liveEpics={};
-        issues.forEach(function(is){var f=is.fields;if(!f||(f.issuetype&&/epic/i.test(f.issuetype.name||'')))return;var c=tkCat((f.status&&f.status.name)||'');if(c!=='active'&&c!=='qa'&&c!=='blocked')return;if(!tkFresh({u:f.updated}))return;var ek=(f.parent&&f.parent.key)||(epicField&&f[epicField])||'';if(ek)liveEpics[String(ek).toUpperCase()]=1;});
+        issues.forEach(function(is){var f=is.fields;if(!f||(f.issuetype&&/epic/i.test(f.issuetype.name||'')))return;var c=tkCat((f.status&&f.status.name)||'');if(c!=='active'&&c!=='qa'&&c!=='blocked')return;if(!tkFresh({u:f.updated}))return;var ek=resolveEpic(f);if(ek)liveEpics[String(ek).toUpperCase()]=1;});
         var parkedIds=[];try{parkedIds=JSON.parse(localStorage.getItem('plt_autoparked')||'[]');}catch(e){}
         projects.forEach(function(p){
           if(p.archived||!p.autoAdded||p.status==='done'||!p.deadline||!p.jiraKey)return;
