@@ -1,6 +1,7 @@
 {
-  "name": "plt-resource-planner",
-  "version": "1.0.0",
+  "name": "platform-planner",
   "private": true,
-  "engines": { "node": "22.x" }
+  "dependencies": {
+    "@vercel/blob": "latest"
+  }
 }
