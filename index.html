@@ -568,7 +568,7 @@ window.engTickets=(function(){try{const d=localStorage.getItem('plt_eng_tickets'
 
 // ---- Shared state: the plan (projects, people, assignments, leads, notes) lives on the server so everyone sees the same thing ----
 var _st={rev:+(localStorage.getItem('plt_state_rev')||0),timer:null,ok:null,busy:false,dirty:false};
-function stKeys(){return {sk:SK,leads:'plt_leads_v1',removed:'plt_removed_devs',parked:'plt_autoparked'};}
+function stKeys(){return {sk:SK,leads:'plt_leads_v1',removed:'plt_removed_devs',parked:'plt_autoparked',repomap:'plt_repo_map'};}
 function stSnapshot(){var k=stKeys(),o={};Object.keys(k).forEach(function(n){o[n]=localStorage.getItem(k[n]);});return o;}
 function stNorm(snap){try{var o={};Object.keys(snap||{}).forEach(function(k){var v=snap[k];if(k==='sk'&&v){try{var j=JSON.parse(v);delete j.collapseState;(j.projects||[]).forEach(function(p){['openN','sig','sigDone','ext','extDone'].forEach(function(x){delete p[x];});});(j.devs||[]).forEach(function(d){delete d.avatar;});v=JSON.stringify(j);}catch(e){}}o[k]=v;});return JSON.stringify(o);}catch(e){return String(Math.random());}}
 function stBanner(cur){if(document.getElementById('st-banner'))return;var b=document.createElement('div');b.id='st-banner';b.style.cssText='position:fixed;top:0;left:50%;transform:translateX(-50%);z-index:9999;background:var(--t,#1a1a1a);color:var(--bg,#fff);font-size:12px;padding:8px 14px;border-radius:0 0 10px 10px;display:flex;gap:12px;align-items:center;box-shadow:0 2px 10px rgba(0,0,0,.2)';b.innerHTML='<span>Someone updated the plan.</span><button style="background:transparent;border:1px solid currentColor;color:inherit;border-radius:6px;padding:2px 10px;cursor:pointer;font-size:12px">Refresh</button>';b.querySelector('button').onclick=function(){stAdopt(cur,'');};document.body.appendChild(b);}
@@ -628,7 +628,7 @@ function leadList(){try{return JSON.parse(localStorage.getItem('plt_leads_v1')||
 function saveLeads(a){try{localStorage.setItem('plt_leads_v1',JSON.stringify(a));}catch(e){}try{stPush();}catch(e){}}
 (function(){try{if(typeof assignments!=='undefined'){var _ch=false;Object.keys(assignments).forEach(function(k){(assignments[k]||[]).forEach(function(a){if(a&&a.src==='jira'&&a.pct>100){a.pct=100;_ch=true;}});});if(_ch)setTimeout(function(){try{save();}catch(e){}},0);}}catch(e){}})();
 (function(){try{if(localStorage.getItem('plt_leads_v1')===null)saveLeads([{id:'l_shea',name:'Shea'},{id:'l_deepak',name:'Deepak'},{id:'l_jay',name:'Jay'}]);}catch(e){}})();
-function linkLeads(){try{if(localStorage.getItem('plt_leads_linked2')==='1')return;var L=leadList(),map={shea:'Shea Long',deepak:'Deepak Bhalla',jay:'Jayakumar Jayaprakasan',jayakumar:'Jayakumar Jayaprakasan'},ch=false;L.forEach(function(l){var full=map[String(l.name).toLowerCase()];if(full&&!l.devId){var d=devs.find(function(x){return String(x.name).toLowerCase()===full.toLowerCase();});if(d){l.devId=d.id;ch=true;}}});if(ch)saveLeads(L);if(devs.length)localStorage.setItem('plt_leads_linked2','1');}catch(e){}}
+function linkLeads(){try{if(!devs.length)return;var L=leadList(),ch=false,nm=function(x){return String(x||'').toLowerCase().replace(/[^a-z ]/g,' ').replace(/\s+/g,' ').trim();};L.forEach(function(l){if(l.devId&&devs.some(function(d){return d.id===l.devId;}))return;var n=nm(l.name);if(!n)return;var c=devs.filter(function(d){return nm(d.name)===n;});if(c.length!==1){var f=n.split(' ')[0];c=devs.filter(function(d){var t=nm(d.name).split(' ');return t[0]===f||(t[0].indexOf(f)===0&&f.length>=3);});}if(c.length===1){l.devId=c[0].id;ch=true;}});if(ch)saveLeads(L);}catch(e){}}
 function leadDev(l){return l&&l.devId?devs.find(function(d){return d.id===l.devId;}):null;}
 function leadProjList(l){linkLeads();return projects.filter(function(p){return !p.archived&&p.status!=='done'&&(p.leads||[]).indexOf(l.id)>=0;});}
 function leadOfDev(devId){linkLeads();return leadList().find(function(l){return l.devId===devId;});}
@@ -1815,8 +1815,7 @@ function capBands(){
   devs.forEach(function(d){
     var r=af[d.id];if(!r){return;}
     var pace=0,src='';
-    if(data&&data.items&&data.items[d.id]){var dn=0;data.items[d.id].forEach(function(it){if(velInc(it,cfg.rule)&&it[1]>=now-42*DAY)dn+=velW(it,c2);});if(dn>0){pace=dn/6;src='last 6 wks';}}
-    if(!(pace>0)&&r.thr>0){pace=r.thr;src=r.src;}
+    pace=r.thr>0?r.thr:0;src=pace>0?r.src:'';
     var tk=((et[d.id]||{}).tickets)||[],live=tk.filter(function(t){var c=tkCat(t.st);return ((c==='active'||c==='qa')&&tkFresh(t))||(c==='todo'&&tkUpcoming(t));});
     var needEst=function(t){return !(t.p>0)&&!/bug|sub-?task|incident|production|prod\b|support|system change|change request|hotfix|defect/i.test(t.it||'');};var unest=pm?live.filter(needEst).length:0;
     var weeks=null;
@@ -1828,7 +1827,7 @@ function capBands(){
     
     if(r.blocked>=2)flags.push(r.blocked+' blocked tickets, queue may not move');
     else if(r.blocked>=1&&r.remaining===0)flags.push(r.blocked+' blocked, nothing else queued');
-    if(weeks==null)flags.push('no finished work in 6 weeks, pace unknown');
+    if(weeks==null)flags.push('no finished work in 3 weeks, pace unknown');
     var plan=[];projects.forEach(function(p){if(p.archived||p.status==='done')return;(assignments[p.id]||[]).forEach(function(a){if(a.devId===d.id&&a.src==='plan')plan.push({n:p.name,pct:a.pct});});});
     out[d.id]={band:band,weeks:weeks,pace:pace,src:src,E:r.E,unit:r.unit,inProg:r.inProg,upcoming:r.upcoming,blocked:r.blocked,flags:flags.slice(0,2),plan:plan,old:Math.round(sc.total),fallback:fallback,unest:unest,openPRs:r.openPRs};
   });
@@ -1859,8 +1858,10 @@ function isReadyForDev(st){var s=(st||'').toLowerCase().trim();return s.indexOf(
 function tkCatCol(c){return c==='done'?'var(--grn)':c==='qa'?'#7C3AED':c==='blocked'?'var(--red)':c==='todo'?'var(--t3)':'var(--acc)';}
 function tkStatusBadge(st){const c=tkCat(st);const col=tkCatCol(c);const bg=c==='done'?'var(--grn-l)':c==='qa'?'rgba(124,58,237,.12)':c==='blocked'?'var(--red-l)':c==='todo'?'var(--s2)':'var(--acc-l)';return '<span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:99px;background:'+bg+';color:'+col+';white-space:nowrap">'+st+'</span>';}
 function tkFresh(t,days){var u=t&&t.u?Date.parse(t.u):NaN;return isNaN(u)||(Date.now()-u)<=(days||30)*864e5;}
-function tkDoneRecent(t){var d=t.r||t.u;if(!d)return false;var a=Date.now()-Date.parse(d);return !isNaN(a)&&a<=21*864e5;}
-function tkUpcoming(t){if(!isReadyForDev(t.st))return false;if(!t.u)return true;var a=Date.now()-Date.parse(t.u);return isNaN(a)||a<=21*864e5;}
+function tkDoneRecent(t,days){var d=t.r||t.u;if(!d)return false;var a=Date.now()-Date.parse(d);return !isNaN(a)&&a<=(days||14)*864e5;}
+function rwCfg(){var d={bug:2,sys:2,sub:0.25};try{var c=JSON.parse(localStorage.getItem('plt_rw_cfg')||'{}');Object.keys(d).forEach(function(k){if(typeof c[k]==='number'&&isFinite(c[k])&&c[k]>=0)d[k]=c[k];});}catch(e){}return d;}
+function rwType(t){var it=String((t&&t.it)||'');if(/sub-?task/i.test(it))return 'sub';if(/bug|defect/i.test(it))return 'bug';if(/incident|production|prod\b|system change|change request|hotfix|support/i.test(it))return 'sys';return '';}
+function tkUpcoming(t){if(!isReadyForDev(t.st))return false;if(!t.u)return true;var a=Date.now()-Date.parse(t.u);return isNaN(a)||a<=14*864e5;}
 function tkShown(t){var c=tkCat(t.st);if(c==='done')return tkDoneRecent(t);if(c==='active'||c==='qa')return true;if(c==='blocked')return false;return tkUpcoming(t);}
 function ptsMode(){var et=window.engTickets||{};for(var k in et){var ts=(et[k]&&et[k].tickets)||[];for(var i=0;i<ts.length;i++)if(ts[i].p>0)return true;}return false;}
 function ptUnit(){return ptsMode()?'pts':'tickets';}
@@ -2061,12 +2062,12 @@ function availForecast(){
   // average points per ticket, used when a ticket has no estimate
   var _ps=[],_all=[];Object.keys(et).forEach(function(k){((et[k]&&et[k].tickets)||[]).forEach(function(t){if(t.p>0)_ps.push(t.p);});});
   const avgPts=_ps.length?_ps.reduce(function(a,b){return a+b;},0)/_ps.length:3;
-  const w=function(t){return pm?(t.p>0?t.p:avgPts):1;};
+  const RW=rwCfg();const w=function(t){if(!pm)return 1;if(t.p>0)return t.p;var ty=rwType(t);return ty?RW[ty]:avgPts;};
   const unit=pm?'pts':'tickets';
   return devs.map(d=>{
     const rec=et[d.id],all=(rec&&rec.tickets)||[];
     const cat=function(t){return tkCat(t.st);};
-    const active=all.filter(t=>cat(t)==='active'&&tkFresh(t)),qa=all.filter(t=>cat(t)==='qa'&&tkFresh(t)),todo=all.filter(t=>cat(t)==='todo'&&tkUpcoming(t)),blockedT=all.filter(t=>cat(t)==='blocked'&&tkFresh(t,30)),doneT=all.filter(t=>cat(t)==='done'&&tkDoneRecent(t));
+    const active=all.filter(t=>cat(t)==='active'&&tkFresh(t)),qa=all.filter(t=>cat(t)==='qa'&&tkFresh(t)),todo=all.filter(t=>cat(t)==='todo'&&tkUpcoming(t)&&!rwType(t)),blockedT=all.filter(t=>cat(t)==='blocked'&&tkFresh(t,30)),doneT=all.filter(t=>cat(t)==='done'&&tkDoneRecent(t,21));
     const gh=ghData[d.id]||{};const openPRs=gh.openPRs||0;
     // remaining effort: not-started counts in full, in-progress about half, in QA about a fifth; open PRs mean work is close to landing
     let E=todo.reduce((a,t)=>a+w(t),0)+active.reduce((a,t)=>a+w(t)*.5,0)+qa.reduce((a,t)=>a+w(t)*.2,0);
@@ -2748,7 +2749,7 @@ function openSettings(tab){
     (tab==='api'?'<div class="mb"><div class="field"><label>Anthropic API Key</label><input id="anth-key" type="password" value="'+anthropicKey+'" placeholder="sk-ant-…" autocomplete="off"><div style="font-size:10px;color:var(--t2);margin-top:3px">For AI Insights refresh. Stored locally only.</div></div><div style="font-size:11px;color:var(--t2);padding:8px 10px;background:var(--s2);border-radius:var(--r)">Get at <strong>console.anthropic.com</strong> → API Keys. ~$0.01/run.</div></div><div class="mf"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-p" onclick="saveAnthropicKey()">Save</button></div>':
     tab==='capacity'?capSettingsHTML():
     tab==='jira'?'<div class="mb"><div style="font-size:11px;color:var(--t2);padding:8px 10px;background:var(--s2);border-radius:var(--r);margin-bottom:10px">Recommended: deploy the proxy, set <code>JIRA_EMAIL</code> + <code>JIRA_TOKEN</code> as Vercel env vars, and set the Proxy URL below. Then you can leave the token & email fields blank — your token stays off the browser.</div><div class="field"><label>Jira API Token <span style="font-weight:400;color:var(--t3)">(optional if using proxy env vars)</span></label><input id="jira-tok" type="password" value="'+jiraToken+'" placeholder="ATATT3x… or blank" autocomplete="off"></div><div class="field"><label>Jira Email <span style="font-weight:400;color:var(--t3)">(optional if using proxy env vars)</span></label><input id="jira-email" type="email" value="'+jiraEmail+'" placeholder="you@centerfield.com or blank"></div><div class="field"><label>Proxy URL <span style="font-weight:400;color:var(--t3)">(required — Jira blocks direct browser calls)</span></label><input id="jira-proxy" value="'+jiraProxy+'" placeholder="/api/jira"><div style="font-size:10px;color:var(--t2);margin-top:3px">Deploy <code>api/jira.js</code> alongside this app, then set this to <code>/api/jira</code>.</div></div><label style="display:flex;align-items:center;gap:8px;font-size:12px;margin-top:4px;cursor:pointer"><input type="checkbox" id="jira-autosync" '+(localStorage.getItem('plt_autosync')==='0'?'':'checked')+' onchange="localStorage.setItem(\'plt_autosync\',this.checked?\'1\':\'0\')"> Auto-sync from Jira when the app opens <span style="color:var(--t3)">(quietly, every 15 min max)</span></label><label style="display:flex;align-items:center;gap:8px;font-size:12px;margin-top:8px;cursor:pointer"><input type="checkbox" id="jira-autoadd" '+(localStorage.getItem('plt_autoadd')==='0'?'':'checked')+' onchange="localStorage.setItem(\'plt_autoadd\',this.checked?\'1\':\'0\')"> Auto-add PLT epics from Jira <span style="color:var(--t3)">(open epics that have a Workstream set)</span></label><div style="margin-top:12px"><label style="font-size:12px;display:block;margin-bottom:4px">Full plate = <b id="anchor-val">'+(+(localStorage.getItem('plt_alloc_anchor')||33)||33)+'</b> pts <span style="color:var(--t3)">(calibrates capacity %)</span></label><input type="range" min="6" max="40" value="'+(+(localStorage.getItem('plt_alloc_anchor')||33)||33)+'" style="width:100%" oninput="document.getElementById(\'anchor-val\').textContent=this.value" onchange="setAnchor(this.value)"><div style="font-size:10px;color:var(--t3);margin-top:2px">Higher = bars read lower. Raise it if everyone looks over-capacity.</div></div></div><div class="mf"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-p" onclick="saveJiraToken()">Save & Sync</button></div>':
-    '<div class="mb"><div class="field"><label>GitHub Personal Access Token</label><input id="gh-tok" type="password" value="'+ghToken+'" placeholder="ghp_…" autocomplete="off"><div style="font-size:10px;color:var(--t2);margin-top:3px">Needs <code>repo</code> + <code>read:org</code> scope.</div></div><div class="field"><label>Organization (slug)</label><input id="gh-org" value="'+ghOrg+'" placeholder="e.g. centerfieldmedia" autocomplete="off"><div style="font-size:10px;color:var(--t2);margin-top:3px">The exact org name from your GitHub URL: github.com/orgs/<b>&lt;this&gt;</b>. A 404 on sync usually means this is wrong.</div></div><div class="field"><label>Login Map (Name = github-login)</label><textarea id="gh-logins" style="width:100%;padding:6px 8px;border:1px solid var(--bdr);border-radius:var(--r);font-size:11px;font-family:var(--mono);min-height:160px;resize:vertical">'+ghLoginMap+'</textarea></div></div><div class="mf"><button class="btn" onclick="closeModal()">Cancel</button>'+(window.ghMatchReport?'<button class="btn" onclick="openGhMatchReport()" style="margin-right:auto">Match report</button>':'')+'<button class="btn btn-p" onclick="saveGhToken()">Save & Sync</button></div>')+
+    '<div class="mb"><div class="field"><label>GitHub Personal Access Token</label><input id="gh-tok" type="password" value="'+ghToken+'" placeholder="ghp_…" autocomplete="off"><div style="font-size:10px;color:var(--t2);margin-top:3px">Needs <code>repo</code> + <code>read:org</code> scope.</div></div><div class="field"><label>Organization (slug)</label><input id="gh-org" value="'+ghOrg+'" placeholder="e.g. centerfieldmedia" autocomplete="off"><div style="font-size:10px;color:var(--t2);margin-top:3px">The exact org name from your GitHub URL: github.com/orgs/<b>&lt;this&gt;</b>. A 404 on sync usually means this is wrong.</div></div><div class="field"><label>Login Map (Name = github-login)</label><textarea id="gh-logins" style="width:100%;padding:6px 8px;border:1px solid var(--bdr);border-radius:var(--r);font-size:11px;font-family:var(--mono);min-height:160px;resize:vertical">'+ghLoginMap+'</textarea></div><div class="field"><label>Repo Map (repo = project epic key or name)</label><textarea id="gh-repos" placeholder="payments-service = PLT-123\nweb-app = PLT-45, PLT-67" style="width:100%;padding:6px 8px;border:1px solid var(--bdr);border-radius:var(--r);font-size:11px;font-family:var(--mono);min-height:90px;resize:vertical">'+(localStorage.getItem('plt_repo_map')||'')+'</textarea><div style="font-size:10px;color:var(--t2);margin-top:3px">PRs and commits in a repo count toward its project when they carry no Jira key. List several projects (comma) to split a shared repo evenly.</div></div></div><div class="mf"><button class="btn" onclick="closeModal()">Cancel</button>'+(window.ghMatchReport?'<button class="btn" onclick="openGhMatchReport()" style="margin-right:auto">Match report</button>':'')+'<button class="btn btn-p" onclick="saveGhToken()">Save & Sync</button></div>')+
     '<div style="display:flex;align-items:center;gap:8px;padding:9px 16px;border-top:1px solid var(--bdr);background:var(--s2)"><span style="font-size:10px;color:var(--t2);flex:1">Keys don\'t carry to a new download. Back them up once, restore into any build.</span><button class="btn" style="font-size:10px;padding:4px 8px" onclick="backupSettings()">↓ Backup</button><button class="btn" style="font-size:10px;padding:4px 8px" onclick="document.getElementById(\'settings-restore\').click()">↑ Restore</button><input type="file" id="settings-restore" accept="application/json,.json" style="display:none" onchange="restoreSettings(event)"></div>'+'</div></div>';
 }
 function capSettingsHTML(){
@@ -2771,7 +2772,7 @@ function saveAnthropicKey(){anthropicKey=document.getElementById('anth-key').val
 function saveJiraToken(){jiraToken=document.getElementById('jira-tok').value.trim();jiraEmail=document.getElementById('jira-email').value.trim();const pxEl=document.getElementById('jira-proxy');if(pxEl){jiraProxy=pxEl.value.trim();localStorage.setItem('plt_jira_proxy',jiraProxy);}localStorage.setItem('plt_jira_token',jiraToken);localStorage.setItem('plt_jira_email',jiraEmail);if(!jiraProxy&&jiraToken&&!jiraEmail){showToast('Add your Jira email too — or set a Proxy URL','warn');return;}if(!jiraReady()){showToast('Enter a token + email, or set a Proxy URL','warn');return;}closeModal();syncAllFromJira();}
 function backupSettings(){const s={anth:anthropicKey,jiraToken:jiraToken,jiraEmail:jiraEmail,ghToken:ghToken,ghOrg:ghOrg,ghLogins:ghLoginMap,jiraSpField:localStorage.getItem('plt_jira_sp_field')||''};const blob=new Blob([JSON.stringify(s,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='planner-settings.json';a.click();showToast('✓ Settings saved to file','info');}
 function restoreSettings(ev){const f=ev.target.files&&ev.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{try{const s=JSON.parse(rd.result);if(s.anth!=null){anthropicKey=s.anth;localStorage.setItem('plt_anth_key',anthropicKey);}if(s.jiraToken!=null){jiraToken=s.jiraToken;localStorage.setItem('plt_jira_token',jiraToken);}if(s.jiraEmail!=null){jiraEmail=s.jiraEmail;localStorage.setItem('plt_jira_email',jiraEmail);}if(s.ghToken!=null){ghToken=s.ghToken;localStorage.setItem('plt_gh_token',ghToken);}if(s.ghOrg!=null){ghOrg=s.ghOrg;localStorage.setItem('plt_gh_org',ghOrg);}if(s.ghLogins!=null){ghLoginMap=s.ghLogins;localStorage.setItem('plt_gh_logins',ghLoginMap);}if(s.jiraSpField)localStorage.setItem('plt_jira_sp_field',s.jiraSpField);showToast('✓ Settings restored','info');openSettings('jira');}catch(e){showToast('Couldn\'t read that settings file','warn');}};rd.readAsText(f);}
-function saveGhToken(){ghToken=document.getElementById('gh-tok').value.trim();ghLoginMap=document.getElementById('gh-logins').value.trim();const orgEl=document.getElementById('gh-org');if(orgEl)ghOrg=orgEl.value.trim().replace(/^.*github\.com\/(orgs\/)?/,'').replace(/\/.*$/,'')||'centerfield';localStorage.setItem('plt_gh_token',ghToken);localStorage.setItem('plt_gh_logins',ghLoginMap);localStorage.setItem('plt_gh_org',ghOrg);closeModal();if(ghToken)syncGithub();}
+function saveGhToken(){ghToken=document.getElementById('gh-tok').value.trim();ghLoginMap=document.getElementById('gh-logins').value.trim();const orgEl=document.getElementById('gh-org');if(orgEl)ghOrg=orgEl.value.trim().replace(/^.*github\.com\/(orgs\/)?/,'').replace(/\/.*$/,'')||'centerfield';localStorage.setItem('plt_gh_token',ghToken);localStorage.setItem('plt_gh_logins',ghLoginMap);var _rp=document.getElementById('gh-repos');if(_rp){localStorage.setItem('plt_repo_map',_rp.value.trim());try{stPush();}catch(e){}}localStorage.setItem('plt_gh_org',ghOrg);closeModal();if(ghToken)syncGithub();}
 function openGhMatchReport(){
   const rep=window.ghMatchReport;
   if(!rep){openSettings('github');return;}
@@ -2795,6 +2796,21 @@ function openGhMatchReport(){
 }
 function saveQuickMap(){const el=document.getElementById('gh-map-quick');if(!el)return;ghLoginMap=el.value.split('\n').map(l=>l.trim()).filter(l=>{const m=l.match(/(?:=|:|→|\t|\s{2,})\s*([A-Za-z0-9-]+)\s*$/);return m&&m[1];}).join('\n');localStorage.setItem('plt_gh_logins',ghLoginMap);closeModal();syncGithub();}
 function clearLoginMapAndSync(){ghLoginMap='';localStorage.setItem('plt_gh_logins','');closeModal();syncGithub();}
+async function ghFetchCommits(headers,ORG,since){
+  try{
+    const ids=Object.keys(ghData||{});
+    for(const did of ids){
+      const g=ghData[did];if(!g||!g.login)continue;
+      const q=encodeURIComponent('author:'+g.login+' org:'+ORG+' committer-date:>'+since);
+      const r=await fetch('https://api.github.com/search/commits?q='+q+'&per_page=100&sort=committer-date',{headers:headers});
+      if(r.status===403||r.status===429)break;
+      if(r.ok){const d=await r.json();g.commits=(d.items||[]).filter(c=>!/^merge /i.test((c.commit&&c.commit.message)||'')).slice(0,100).map(c=>({m:String((c.commit&&c.commit.message)||'').split('\n')[0].slice(0,120),r:(c.repository&&c.repository.name)||''}));}
+      await new Promise(res=>setTimeout(res,2200));
+    }
+    localStorage.setItem('plt_gh_data',JSON.stringify(ghData));
+  }catch(e){console.warn('Commit fetch failed',e);}
+}
+function repoMapParse(){var m={};try{String(localStorage.getItem('plt_repo_map')||'').split('\n').forEach(function(l){var i=l.indexOf('=');if(i<0)return;var r=l.slice(0,i).trim().toLowerCase(),v=l.slice(i+1).split(',').map(function(x){return x.trim();}).filter(Boolean);if(r&&v.length)m[r]=v;});}catch(e){}return m;}
 async function syncGithub(silent){
   if(!ghToken){if(silent)return{skipped:true};openSettings('github');return;}
   const btn=document.getElementById('gh-btn')||{};
@@ -2866,7 +2882,7 @@ async function syncGithub(silent){
     // build ghData from grouped PRs
     const since30date=new Date(since30+'T00:00:00Z');
     ghData={};
-    Object.keys(authorToDev).forEach(login=>{const devId=authorToDev[login];const prs=byAuthor[login]||[];const openPRs=prs.filter(pr=>pr.state==='open');const merged=prs.filter(pr=>pr.pull_request&&pr.pull_request.merged_at).length;const prs30=prs.filter(pr=>new Date(pr.created_at)>since30date).length;const cycles=prs.filter(pr=>pr.pull_request&&pr.pull_request.merged_at).map(pr=>Math.round((new Date(pr.pull_request.merged_at)-new Date(pr.created_at))/864e5)).filter(d=>d>=0&&d<180);const avgCycle=cycles.length?Math.round(cycles.reduce((a,b)=>a+b,0)/cycles.length):null;const repos=new Set();prs.forEach(pr=>{const rp=pr.repository_url&&pr.repository_url.match(/\/([^\/]+)$/);if(rp)repos.add(rp[1]);});ghData[devId]={prs:prs30,merged:merged,openPRs:openPRs.length,avgCycleDays:avgCycle,repos:Array.from(repos).slice(0,5),login:login,lastSync:new Date().toISOString(),prAll:prs.filter(pr=>new Date(pr.created_at)>since30date).map(pr=>({t:String(pr.title||'').slice(0,160),o:pr.state==='open',m:!!(pr.pull_request&&pr.pull_request.merged_at)})),prList:prs.slice(0,15).map(pr=>({title:pr.title,url:pr.html_url,state:pr.state,merged:!!(pr.pull_request&&pr.pull_request.merged_at),repo:pr.repository_url&&pr.repository_url.match(/\/([^\/]+)$/)?pr.repository_url.match(/\/([^\/]+)$/)[1]:'',daysOpen:Math.round((Date.now()-new Date(pr.created_at))/864e5)})),cycleTimes:prs.filter(pr=>pr.pull_request&&pr.pull_request.merged_at).map(pr=>Math.round((new Date(pr.pull_request.merged_at)-new Date(pr.created_at))/864e5)).filter(d=>d>=0&&d<180),openAges:prs.filter(pr=>pr.state==='open').map(pr=>Math.round((Date.now()-new Date(pr.created_at))/864e5))};});
+    Object.keys(authorToDev).forEach(login=>{const devId=authorToDev[login];const prs=byAuthor[login]||[];const openPRs=prs.filter(pr=>pr.state==='open');const merged=prs.filter(pr=>pr.pull_request&&pr.pull_request.merged_at).length;const prs30=prs.filter(pr=>new Date(pr.created_at)>since30date).length;const cycles=prs.filter(pr=>pr.pull_request&&pr.pull_request.merged_at).map(pr=>Math.round((new Date(pr.pull_request.merged_at)-new Date(pr.created_at))/864e5)).filter(d=>d>=0&&d<180);const avgCycle=cycles.length?Math.round(cycles.reduce((a,b)=>a+b,0)/cycles.length):null;const repos=new Set();prs.forEach(pr=>{const rp=pr.repository_url&&pr.repository_url.match(/\/([^\/]+)$/);if(rp)repos.add(rp[1]);});ghData[devId]={prs:prs30,merged:merged,openPRs:openPRs.length,avgCycleDays:avgCycle,repos:Array.from(repos).slice(0,5),login:login,lastSync:new Date().toISOString(),prAll:prs.filter(pr=>new Date(pr.created_at)>since30date).map(pr=>({t:String(pr.title||'').slice(0,160),o:pr.state==='open',m:!!(pr.pull_request&&pr.pull_request.merged_at),r:(pr.repository_url&&pr.repository_url.match(/\/([^\/]+)$/)||[])[1]||''})),prList:prs.slice(0,15).map(pr=>({title:pr.title,url:pr.html_url,state:pr.state,merged:!!(pr.pull_request&&pr.pull_request.merged_at),repo:pr.repository_url&&pr.repository_url.match(/\/([^\/]+)$/)?pr.repository_url.match(/\/([^\/]+)$/)[1]:'',daysOpen:Math.round((Date.now()-new Date(pr.created_at))/864e5)})),cycleTimes:prs.filter(pr=>pr.pull_request&&pr.pull_request.merged_at).map(pr=>Math.round((new Date(pr.pull_request.merged_at)-new Date(pr.created_at))/864e5)).filter(d=>d>=0&&d<180),openAges:prs.filter(pr=>pr.state==='open').map(pr=>Math.round((Date.now()-new Date(pr.created_at))/864e5))};});
     localStorage.setItem('plt_gh_data',JSON.stringify(ghData));
     // report: real active handles that didn't match a dev (with PR counts) → the pool to map from
     const activeUnmatched=Object.keys(byAuthor).filter(l=>!authorToDev[l]).map(l=>({login:l,count:byAuthor[l].length})).sort((a,b)=>b.count-a.count);
@@ -2881,6 +2897,7 @@ async function syncGithub(silent){
       unclaimedLogins:activeUnmatched.map(a=>a.login+' ('+a.count+')')
     };
     render();
+    try{ghFetchCommits(headers,ORG,since30);}catch(e){}
     btn.innerHTML='<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" style="width:12px;height:12px"><path d="M6 1C3.2 1 1 3.2 1 6c0 2.2 1.4 4 3.4 4.7.2 0 .3-.1.3-.3v-.8c-1.4.3-1.7-.6-1.7-.6-.2-.6-.6-.7-.6-.7-.5-.3 0-.3 0-.3.5 0 .8.5.8.5.5.8 1.2.6 1.5.4 0-.3.2-.6.4-.7-1.1-.1-2.3-.6-2.3-2.5 0-.6.2-1 .5-1.4 0-.1-.2-.7.1-1.4 0 0 .4-.1 1.4.5.4-.1.8-.2 1.2-.2s.8.1 1.2.2c1-.6 1.4-.5 1.4-.5.3.7.1 1.3.1 1.4.3.4.5.8.5 1.4 0 1.9-1.2 2.4-2.3 2.5.2.1.3.4.3.9v1.3c0 .2.1.3.3.3C9.6 10 11 8.2 11 6c0-2.8-2.2-5-5-5z"/></svg>';
     btn.disabled=false;
     if(silent)return{devs:Object.keys(ghData).length,prs:allPRs.length};
@@ -3127,6 +3144,7 @@ async function autoAssignFromJira(silent){
       catch(e){console.warn('Auto-add from Jira failed',e);}
     }
     // ---- sub-tasks: only list them for an engineer when the parent story belongs to someone else ----
+    const jaL=function(f,pts,st){const c=tkCat(st);const m=c==='done'?((f.resolutiondate&&(Date.now()-Date.parse(f.resolutiondate))<=21*864e5)?1:0):c==='todo'?0:c==='blocked'?.5:1;if(!m)return 0;const ty=rwType({it:(f.issuetype&&f.issuetype.name)||''});const base=(pts!=null&&pts>0)?pts:(ty?rwCfg()[ty]:3);return base*m;};
     const isSub=function(f){return !!(f&&f.issuetype&&(f.issuetype.subtask||/sub-?task/i.test(f.issuetype.name||'')));};
     const parentAsg={},parentEpic={};
     try{
@@ -3150,7 +3168,7 @@ async function autoAssignFromJira(silent){
       if(!epicKey){noEpic++;_addOther();return;}
       const proj=projByKey[String(epicKey).toUpperCase()];if(!proj){_addOther();return;}
       if(!(f.issuetype&&/epic/i.test(f.issuetype.name||''))){const _pc=tkCat(stName);const _pm=progMap[proj.id]=progMap[proj.id]||{dn:0,ip:0,td:0,bl:0};if(_pc==='done')_pm.dn++;else if(_pc==='active'||_pc==='qa')_pm.ip++;else if(_pc==='blocked')_pm.bl++;else _pm.td++;}
-      if(dev&&!ownSub(f)){const load=((pts!=null&&pts>0)?pts:3)*tkStateWeight(stName);byProj[proj.id]=byProj[proj.id]||{};byProj[proj.id][dev.id]=(byProj[proj.id][dev.id]||0)+load;}
+      if(dev&&!ownSub(f)){const load=jaL(f,pts,stName);byProj[proj.id]=byProj[proj.id]||{};byProj[proj.id][dev.id]=(byProj[proj.id][dev.id]||0)+load;}
       const wls=(f.worklog&&f.worklog.worklogs)||[];wls.forEach(w=>{if(!w.started||w.started.slice(0,10)<monthStartISO)return;const wdev=matchDev(w.author);if(!wdev)return;const hrs=(w.timeSpentSeconds||0)/3600;if(hrs<=0)return;hoursByProj[proj.id]=hoursByProj[proj.id]||{};hoursByProj[proj.id][wdev.id]=(hoursByProj[proj.id][wdev.id]||0)+hrs;if(w.started.slice(0,10)>=ago14ISO){recentWork[wdev.id]=recentWork[wdev.id]||{};var rw=recentWork[wdev.id];rw[is.key]=rw[is.key]||{k:is.key,s:f.summary||'',it:(f.issuetype&&f.issuetype.name)||'',st:stName,hrs:0};rw[is.key].hrs+=hrs;}});
     });
     // ---- auto-park auto-added epics that are far overdue and have no live work ----
@@ -3173,25 +3191,32 @@ async function autoAssignFromJira(silent){
       }
     }catch(e){console.warn('Auto-park failed',e);}
     // ---- PR signal: GitHub PRs whose title carries a Jira key -> that key's epic -> project ----
-    const prSrc={};
+    const prSrc={};const codeW={};
     try{
       let KE={};try{KE=JSON.parse(localStorage.getItem('plt_key_epic')||'{}')||{};}catch(e){}
       Object.keys(keyEpic).forEach(k=>{KE[k]=keyEpic[k];});
       const _ks=Object.keys(KE);if(_ks.length>6000){_ks.slice(0,_ks.length-6000).forEach(k=>{delete KE[k];});}
       try{localStorage.setItem('plt_key_epic',JSON.stringify(KE));}catch(e){}
+      const repoIds={};try{const rm=repoMapParse();Object.keys(rm).forEach(r=>{repoIds[r]=rm[r].map(v=>{const pj=projByKey[v.toUpperCase()]||projects.find(p=>!p.archived&&String(p.name).toLowerCase()===v.toLowerCase());return pj&&pj.id;}).filter(Boolean);});}catch(e){}
       Object.keys(window.ghData||ghData||{}).forEach(did=>{
         const g=(window.ghData||ghData)[did];if(!g||!g.prAll||!devs.some(d=>d.id===did))return;
         const per={};
-        g.prAll.forEach(pr=>{const seen={};(String(pr.t).match(/[A-Z][A-Z0-9]+-\d+/g)||[]).forEach(k=>{if(seen[k])return;seen[k]=1;const ek=projByKey[k]?k:KE[k];const pj=ek&&projByKey[ek];if(!pj)return;per[pj.id]=(per[pj.id]||0)+(pr.o?1:.5);});});
-        Object.keys(per).forEach(pid=>{byProj[pid]=byProj[pid]||{};prSrc[pid+'|'+did]=byProj[pid][did]?'both':'pr';byProj[pid][did]=(byProj[pid][did]||0)+Math.min(3,per[pid]);});
+        const add=(text,repo,w)=>{const seen={};let hit=false;(String(text||'').match(/[A-Z][A-Z0-9]+-\d+/g)||[]).forEach(k=>{if(seen[k])return;seen[k]=1;const ek=projByKey[k]?k:KE[k];const pj=ek&&projByKey[ek];if(!pj)return;per[pj.id]=(per[pj.id]||0)+w;hit=true;});if(!hit&&repo){const ids=repoIds[String(repo).toLowerCase()];if(ids&&ids.length)ids.forEach(pid=>{per[pid]=(per[pid]||0)+w/ids.length;});}};
+        g.prAll.forEach(pr=>add(pr.t,pr.r,(pr.o||pr.m)?1:.25));
+        (g.commits||[]).forEach(c=>add(c.m,c.r,.25));
+        Object.keys(per).forEach(pid=>{codeW[pid]=codeW[pid]||{};codeW[pid][did]=(codeW[pid][did]||0)+per[pid];});
       });
     }catch(e){console.warn('PR assignment signal failed',e);}
     window.__projProg=progMap;try{localStorage.setItem('plt_proj_prog',JSON.stringify(progMap));}catch(e){}
     window.engTickets=engT;window.engRecentWork=recentWork;window.engOther=otherW;try{localStorage.setItem('plt_eng_tickets',JSON.stringify(engT));localStorage.setItem('plt_eng_other',JSON.stringify(otherW));}catch(e){}
     const assignedDevs=new Set();let touched=0,hoursUsed=0;const summary=[];
     const ANCHOR=+(localStorage.getItem('plt_alloc_anchor')||33)||33;
-    const allPids=Object.keys(byProj);
-    allPids.forEach(pid=>{const devMap=byProj[pid]||{};const dids=Object.keys(devMap);const list=dids.map(did=>{let pct=Math.round((devMap[did]||0)/ANCHOR*100);const _via=prSrc[pid+'|'+did]||'tickets';if(pct<(_via==='pr'?5:3))pct=(_via==='pr'?5:3);assignedDevs.add(did);return{devId:did,pct:Math.min(pct,100),src:'jira',via:_via};});if(!list.length)return;assignments[pid]=list.concat((assignments[pid]||[]).filter(a=>a.src==='plan'));touched++;const p=projects.find(x=>x.id===pid);if(p)summary.push({name:p.name,n:list.length});});
+    // Allocation = each engineer's time split across projects. Code activity (PRs and commits, 60%) leads; Jira story points (40%) size the effort. Each person's shares sum to 100%.
+    const WC=.6,WJ=.4;const sumJ={},sumC={};
+    Object.keys(byProj).forEach(pid=>{Object.keys(byProj[pid]).forEach(did=>{sumJ[did]=(sumJ[did]||0)+byProj[pid][did];});});
+    Object.keys(codeW).forEach(pid=>{Object.keys(codeW[pid]).forEach(did=>{sumC[did]=(sumC[did]||0)+codeW[pid][did];});});
+    const allPids=Array.from(new Set(Object.keys(byProj).concat(Object.keys(codeW))));
+    allPids.forEach(pid=>{const jm=byProj[pid]||{},cm=codeW[pid]||{};const dids=Array.from(new Set(Object.keys(jm).concat(Object.keys(cm))));const list=dids.map(did=>{const hj=sumJ[did]>0,hc=sumC[did]>0;const sj=hj?(jm[did]||0)/sumJ[did]:0,sc=hc?(cm[did]||0)/sumC[did]:0;const share=(hj&&hc)?WJ*sj+WC*sc:(hc?sc:sj);let pct=Math.round(share*100);const _via=(jm[did]>0&&cm[did]>0)?'both':(cm[did]>0?'pr':'tickets');if(pct<3)pct=3;assignedDevs.add(did);return{devId:did,pct:Math.min(pct,100),src:'jira',via:_via};});if(!list.length)return;assignments[pid]=list.concat((assignments[pid]||[]).filter(a=>a.src==='plan'));touched++;const p=projects.find(x=>x.id===pid);if(p)summary.push({name:p.name,n:list.length});});
     save();if(view==='overview')renderOverview();if(view==='board')renderBoard();if(view==='team')renderTeamView();if(selPid)selProject(selPid);
     try{await loadLooseTickets(headers);}catch(e){console.warn('Individual tickets load failed',e);}
     try{await loadProjectExternals(headers,matchDev);}catch(e){console.warn('Project externals load failed',e);}
