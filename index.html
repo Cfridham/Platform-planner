@@ -570,6 +570,8 @@ window.engTickets=(function(){try{const d=localStorage.getItem('plt_eng_tickets'
 var _st={rev:+(localStorage.getItem('plt_state_rev')||0),timer:null,ok:null,busy:false,dirty:false};
 function stKeys(){return {sk:SK,leads:'plt_leads_v1',removed:'plt_removed_devs',parked:'plt_autoparked'};}
 function stSnapshot(){var k=stKeys(),o={};Object.keys(k).forEach(function(n){o[n]=localStorage.getItem(k[n]);});return o;}
+function stNorm(snap){try{var o={};Object.keys(snap||{}).forEach(function(k){var v=snap[k];if(k==='sk'&&v){try{var j=JSON.parse(v);delete j.collapseState;(j.projects||[]).forEach(function(p){['openN','sig','sigDone','ext','extDone'].forEach(function(x){delete p[x];});});(j.devs||[]).forEach(function(d){delete d.avatar;});v=JSON.stringify(j);}catch(e){}}o[k]=v;});return JSON.stringify(o);}catch(e){return String(Math.random());}}
+function stBanner(cur){if(document.getElementById('st-banner'))return;var b=document.createElement('div');b.id='st-banner';b.style.cssText='position:fixed;top:0;left:50%;transform:translateX(-50%);z-index:9999;background:var(--t,#1a1a1a);color:var(--bg,#fff);font-size:12px;padding:8px 14px;border-radius:0 0 10px 10px;display:flex;gap:12px;align-items:center;box-shadow:0 2px 10px rgba(0,0,0,.2)';b.innerHTML='<span>Someone updated the plan.</span><button style="background:transparent;border:1px solid currentColor;color:inherit;border-radius:6px;padding:2px 10px;cursor:pointer;font-size:12px">Refresh</button>';b.querySelector('button').onclick=function(){stAdopt(cur,'');};document.body.appendChild(b);}
 function stApply(d){var k=stKeys();Object.keys(k).forEach(function(n){if(d&&d[n]!=null)localStorage.setItem(k[n],d[n]);});}
 function stInd(){
   var el=document.getElementById('st-ind');
@@ -580,6 +582,7 @@ function stInd(){
 }
 function stPush(){
   if(_st.ok===false||window._stAdopting)return;
+  if(_st.last&&stNorm(stSnapshot())===_st.last&&!_st.dirty)return;
   _st.dirty=true;stInd();clearTimeout(_st.timer);
   _st.timer=setTimeout(stFlush,1500);
 }
@@ -590,7 +593,7 @@ async function stFlush(){
     var r=await fetch('/api/state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({baseRev:_st.rev,data:stSnapshot()})});
     if(r.status===409){var cur=await r.json();var _ae=document.activeElement;if(_ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(_ae.tagName)){_st.timer=setTimeout(stFlush,8000);return;}if(cur&&cur.data){stAdopt(cur,'Someone else saved a change first — refreshed to the latest plan.');}return;}
     if(!r.ok){if(r.status===503||r.status===404){_st.ok=false;}return;}
-    var j=await r.json();_st.rev=j.rev;localStorage.setItem('plt_state_rev',String(j.rev));_st.ok=true;_st.dirty=false;
+    var j=await r.json();_st.rev=j.rev;localStorage.setItem('plt_state_rev',String(j.rev));_st.ok=true;_st.dirty=false;_st.last=stNorm(stSnapshot());
   }catch(e){}
   finally{_st.busy=false;stInd();}
 }
@@ -610,8 +613,10 @@ async function stCheck(first){
       stInd();return;}
     if(!r.ok){_st.ok=false;stInd();return;}
     var cur=await r.json();_st.ok=true;
-    if(cur.same){stInd();return;}
+    if(cur.same){if(!_st.last)_st.last=stNorm(stSnapshot());stInd();return;}
     if(cur.rev>_st.rev){
+      if(stNorm(cur.data)===stNorm(stSnapshot())){_st.rev=cur.rev;localStorage.setItem('plt_state_rev',String(cur.rev));_st.last=stNorm(stSnapshot());stInd();return;}
+      if(!first&&!document.hidden){stBanner(cur);stInd();return;}
       var ae=document.activeElement;if(!first&&ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)){stInd();return;} // don't reload while someone is typing
       stAdopt(cur,first?'':'The plan was updated by someone else — refreshed.');
     }
@@ -1035,27 +1040,30 @@ function velInit(ctx,devId){
   if(!ok)st.dev=ctx==='m'?'*':(devs[0]&&devs[0].id);
   st.sel=null;velRender();
 }
+function mxCapDelivery(){
+  var data=velData();if(!data||!data.items)return null;
+  var cfg=velCfg(),DAY=864e5,now=Date.now(),anyPts=false;
+  Object.keys(data.items).forEach(function(id){(data.items[id]||[]).forEach(function(it){if(+it[4]>0)anyPts=true;});});
+  var c2={unit:(cfg.unit==='points'&&anyPts)?'points':'issues'},U=c2.unit==='points'?'pts':'issues';
+  var rows=devs.map(function(d){var done=0;(data.items[d.id]||[]).forEach(function(it){if(!velInc(it,cfg.rule))return;if(it[1]>=now-14*DAY)done+=velW(it,c2);});
+    var bl=(((window.engTickets||{})[d.id]||{}).tickets||[]).filter(function(t){return tkCat(t.st)==='blocked'&&tkFresh(t);}).length;
+    return {d:d,al:alloc(d.id),cap:d.capacity||100,done:Math.round(done*10)/10,bl:bl};}).filter(function(r){return r.al>0||r.done>0;});
+  var ds=rows.map(function(r){return r.done;}).sort(function(a,b){return a-b;}),med=ds.length?ds[Math.floor(ds.length/2)]:0;
+  var by={};rows.forEach(function(r){var lbl,cls;
+    if(r.al>r.cap){if(r.bl>0){lbl=r.bl+' blocked ticket'+(r.bl>1?'s':'');cls='a';}else if(r.done<med*0.6){lbl='Overloaded, low output';cls='r';}else{lbl='Overloaded, delivering';cls='a';}}
+    else if(r.al<r.cap*0.7&&r.done>=med&&r.done>0){lbl='Has room, delivering';cls='g';}
+    else if(r.al<r.cap*0.5&&r.done<med*0.5){lbl='Has room';cls='g';}
+    else{lbl='Healthy';cls='g';}
+    by[r.d.id]={done:r.done,lbl:lbl,cls:cls,bl:r.bl};});
+  return {byDev:by,U:U};
+}
 function mxExtraHTML(){
   var data=velData(),esc=function(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;');};
   var card=function(title,tag,sub,body,note){return '<div class="chart-card" style="margin-bottom:12px"><div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><div class="chart-title" style="margin:0">'+title+'</div><span style="font-size:10px;font-weight:600;color:var(--acc);background:var(--s2);border-radius:99px;padding:2px 8px">'+tag+'</span></div><div style="font-size:11px;color:var(--t3);margin:2px 0 12px">'+sub+'</div>'+body+(note?'<div style="font-size:10px;color:var(--t3);margin-top:10px;line-height:1.5">'+note+'</div>':'')+'</div>';};
-  if(!data||!data.items)return card('Capacity vs. delivery','who is overloaded vs. shipping','Needs velocity data','<div style="font-size:12px;color:var(--t3)">Load velocity data above to see these sections.</div>');
+  if(!data||!data.items)return card('Throughput by workstream','where the work is going','Needs velocity data','<div style="font-size:12px;color:var(--t3)">Load velocity data above to see these sections.</div>');
   var cfg=velCfg(),DAY=864e5,now=Date.now();
   var anyPts=false;Object.keys(data.items).forEach(function(id){(data.items[id]||[]).forEach(function(it){if(+it[4]>0)anyPts=true;});});
   var c2={unit:(cfg.unit==='points'&&anyPts)?'points':'issues'},U=c2.unit==='points'?'pts':'issues';
-  // 1 capacity vs delivery
-  var rows=devs.map(function(d){var done=0;(data.items[d.id]||[]).forEach(function(it){if(!velInc(it,cfg.rule))return;if(it[1]>=now-14*DAY)done+=velW(it,c2);});
-    var bl=(((window.engTickets||{})[d.id]||{}).tickets||[]).filter(function(t){return tkCat(t.st)==='blocked'&&tkFresh(t);}).length;
-    return {d:d,al:alloc(d.id),cap:d.capacity||100,done:done,bl:bl};}).filter(function(r){return r.al>0||r.done>0;}).sort(function(a,b){return b.al-a.al;});
-  var ds=rows.map(function(r){return r.done;}).sort(function(a,b){return a-b;}),med=ds.length?ds[Math.floor(ds.length/2)]:0;
-  var maxA=Math.max(100,Math.max.apply(null,rows.map(function(r){return r.al;}).concat([0]))),maxD=Math.max(1,Math.max.apply(null,ds.concat([0])));
-  var read=function(r){var lbl,cls;if(r.al>r.cap){if(r.bl>0){lbl=r.bl+' blocked ticket'+(r.bl>1?'s':'');cls='a';}else if(r.done<med*0.6){lbl='Overloaded, low output';cls='r';}else{lbl='Overloaded, delivering';cls='a';}}else if(r.al<r.cap*0.7&&r.done>=med&&r.done>0){lbl='Has room, delivering';cls='g';}else if(r.al<r.cap*0.5&&r.done<med*0.5){lbl='Has room';cls='g';}else{lbl='Healthy';cls='g';}
-    var col=cls==='r'?['var(--red)','rgba(217,45,32,.12)']:cls==='a'?['var(--amb)','rgba(217,119,6,.14)']:['var(--grn)','rgba(22,163,74,.12)'];return '<span style="font-size:11px;font-weight:500;padding:2px 9px;border-radius:99px;white-space:nowrap;color:'+col[0]+';background:'+col[1]+'">'+lbl+'</span>';};
-  var G='display:grid;grid-template-columns:150px 1fr 1fr 170px;gap:14px;align-items:center;padding:8px 0;border-top:1px solid var(--bdr);';
-  var bar=function(w,col,txt){return '<div style="display:flex;gap:8px;align-items:center"><div style="flex:1;height:8px;border-radius:99px;background:var(--s2);overflow:hidden"><div style="width:'+Math.max(0,Math.min(100,w))+'%;height:100%;background:'+col+';border-radius:99px"></div></div><span style="font-family:var(--mono);font-size:11px;min-width:34px;text-align:right">'+txt+'</span></div>';};
-  var lab='font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--t3)';
-  var capBody='<div style="'+G+'border-top:none;padding-top:0"><span style="'+lab+'">Engineer</span><span style="'+lab+'">Allocated</span><span style="'+lab+'">'+U+' done (14 days)</span><span style="'+lab+'">Read</span></div>'+
-    (rows.length?rows.map(function(r){return '<div style="'+G+'"><span style="font-size:12px;cursor:pointer" onclick="openTeamDevDetail(\''+r.d.id+'\')">'+esc(r.d.name)+'</span>'+bar(r.al/maxA*100,ac(r.al,r.cap),Math.round(r.al)+'%')+bar(r.done/maxD*100,'var(--grn)',Math.round(r.done*10)/10)+'<div>'+read(r)+'</div></div>';}).join(''):'<div style="font-size:12px;color:var(--t3);padding:8px 0">No allocations or completed work yet.</div>');
-  var capCard=card('Capacity vs. delivery','who is overloaded vs. shipping','Allocated % against '+(U==='pts'?'story points':'issues')+' finished in the last 14 days.',capBody,'“Read” is a label, not a score: over-allocated with low output often means blocked work, not slow work. Allocation is today’s figure.');
   // 2 throughput by workstream
   var parent={},byKey={};projects.forEach(function(p){if(p.jiraKey)byKey[String(p.jiraKey).toUpperCase()]=p;});
   Object.keys(data.items).forEach(function(id){(data.items[id]||[]).forEach(function(it){if(it[5])parent[String(it[0]).toUpperCase()]=String(it[5]).toUpperCase();});});
@@ -1068,7 +1076,7 @@ function mxExtraHTML(){
     var bars=o.b.map(function(v,i){var h=Math.round(v/mx*36);return '<rect x="'+(2+i*20)+'" y="'+(40-h)+'" width="14" height="'+h+'" rx="1.5" fill="'+wsCol(k)+'"><title>'+v+' '+U+'</title></rect>';}).join('');
     return '<div><div style="display:flex;justify-content:space-between;gap:6px"><b style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(k)+'</b><span style="font-family:var(--mono);font-size:11px">'+Math.round(o.t*10)/10+' '+U+'</span></div><svg viewBox="0 0 120 40" width="100%" height="48" preserveAspectRatio="none">'+bars+'</svg>'+(tr?'<div style="font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:'+tr[1]+';margin-top:2px">'+tr[0]+'</div>':'')+'</div>';}).join('');
   var thCard=card('Throughput by workstream','where the work is going',(U==='pts'?'Story points':'Issues')+' completed per week, last 6 weeks (rolling 7-day weeks, newest on the right).',wl.length?'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px">'+tcard+'</div>':'<div style="font-size:12px;color:var(--t3)">No completed work in the last 6 weeks.</div>','Workstream comes from the project an issue belongs to; work under no tracked project is grouped as Other. Same Jira data as the velocity chart.');
-  return capCard+thCard;
+  return thCard;
 }
 function velRender(){['m','e'].forEach(function(ctx){var el=document.getElementById('vel-'+ctx);if(el&&window._velSt[ctx])el.innerHTML=velHTML(ctx);});var _x=document.getElementById('mx-extra');if(_x)try{_x.innerHTML=mxExtraHTML();}catch(e){}}
 function velHTML(ctx){
@@ -1742,7 +1750,7 @@ function tkTypeShort(it){it=(it||'').toLowerCase();if(it.indexOf('sub')>=0)retur
 function tkTypeCol(it){it=(it||'').toLowerCase();if(it.indexOf('bug')>=0||it.indexOf('defect')>=0)return 'var(--red)';if(it.indexOf('story')>=0)return 'var(--grn)';if(it.indexOf('sub')>=0)return 'var(--blu)';return 'var(--t3)';}
 function tkListHTML(arr){var row=function(t){return '<a href="'+JIRA+'/browse/'+t.k+'" target="_blank" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--bdr);border-radius:var(--r);margin-bottom:3px;text-decoration:none;background:var(--sur)"><span style="font-family:var(--mono);font-size:10px;color:var(--acc);flex-shrink:0">'+t.k+'</span>'+(t.it?'<span style="font-size:8px;font-weight:600;padding:1px 5px;border-radius:99px;background:var(--s2);color:'+tkTypeCol(t.it)+';flex-shrink:0">'+tkTypeShort(t.it)+'</span>':'')+'<span style="font-size:11px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--t)">'+t.s+'</span><span style="font-size:10px;font-family:var(--mono);color:var(--t3);flex-shrink:0">'+(t.p!=null?t.p:'–')+'</span>'+((tkCat(t.st)==='blocked'&&t.u)?blockedAgeChip(t.u):'')+tkStatusBadge(t.st)+'</a>';};if(arr.length<=8)return arr.map(row).join('');return arr.slice(0,8).map(row).join('')+'<details style="margin-top:1px"><summary style="font-size:10px;color:var(--acc);cursor:pointer;list-style:none;padding:4px 2px">Show all '+arr.length+' \u2192</summary>'+arr.slice(8).map(row).join('')+'</details>';}
   function tkGroup(title,arr,col){return arr.length?'<div style="margin-top:14px"><div style="font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:'+col+';margin-bottom:6px">'+title+' ('+arr.length+' · '+arr.reduce((s,t)=>s+(t.p||0),0)+' pts)</div>'+tkListHTML(arr)+'</div>':'';}
-  let ticketBlock='',velBlock='<div id="vel-e" class="chart-card" style="margin-top:16px"></div>';
+  let ticketBlock='',velBlock=devAvailBlock(devId);
   if(etRec&&etRec.tickets&&etRec.tickets.length){
     const s=engStats(etRec);
     const cur=etRec.tickets.filter(t=>{const c=tkCat(t.st);return c==='active'||c==='qa';});
@@ -1755,7 +1763,6 @@ function tkListHTML(arr){var row=function(t){return '<a href="'+JIRA+'/browse/'+
   }
   const workContent='<div><div style="font-size:10px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--t3);margin-bottom:8px">Active Projects ('+devProjs.length+')</div>'+(devProjs.length?devProjs.map(p=>{const a=(assignments[p.id]||[]).find(x=>x.devId===devId);const ws=p.workstream||'Unassigned',wcol=wsCol(ws),dc=dateCls(p.deadline);return '<div class="dev-proj-row" onclick="setView(\'board\');setTimeout(()=>selProject(\''+p.id+'\'),100)"><div style="width:3px;height:24px;border-radius:99px;background:'+wcol+';flex-shrink:0"></div><div style="flex:1;min-width:0"><div style="font-size:11px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+p.name+'</div><div style="font-size:10px;color:'+wcol+'">'+ws+(dc&&p.deadline?' · <span class="pc-date '+dc+'">'+p.deadline+'</span>':'')+'</div></div><span style="font-size:11px;font-family:var(--mono);color:'+col+';font-weight:600;flex-shrink:0">'+(a&&a.src==='plan'?'<span class="plan-chip">plan</span>':'')+(a?a.pct+'%':'')+'</span></div>';}).join(''):'<div style="font-size:11px;color:var(--t3);padding:8px 0">No active projects assigned</div>')+devDeliveryPanel(devId)+ticketBlock+velBlock+'</div>';
   const ghContent=gh?'<div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px">'+[{v:gh.prs||0,l:'PRs 30d',c:'#7C3AED'},{v:gh.merged||0,l:'Merged',c:'var(--grn)'},{v:gh.openPRs||0,l:'Open',c:(gh.openPRs||0)>3?'var(--amb)':'var(--t)'},{v:gh.avgCycleDays!=null?gh.avgCycleDays+'d':'—',l:'Cycle avg',c:gh.avgCycleDays!=null?(gh.avgCycleDays<=5?'var(--grn)':gh.avgCycleDays<=14?'var(--amb)':'var(--red)'):'var(--t3)'}].map(s=>'<div style="background:var(--sur);border:1px solid var(--bdr);border-radius:var(--r);padding:8px;text-align:center"><div style="font-size:15px;font-weight:700;font-family:var(--mono);color:'+s.c+'">'+s.v+'</div><div style="font-size:9px;color:var(--t2)">'+s.l+'</div></div>').join('')+'</div>'+(gh.prList&&gh.prList.length?'<div style="font-size:10px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--t3);margin-bottom:6px">Recent PRs</div>'+gh.prList.slice(0,10).map(pr=>{const sl=pr.merged?'Merged':pr.state==='open'?'Open':'Closed';const stCol=pr.merged?'var(--grn)':pr.state==='open'?'var(--acc)':'var(--t3)';return '<a href="'+pr.url+'" target="_blank" style="display:flex;align-items:center;gap:6px;padding:6px 8px;border:1px solid var(--bdr);border-radius:var(--r);margin-bottom:3px;text-decoration:none;color:var(--t);background:var(--sur)"><span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:99px;background:'+(pr.merged?'var(--grn-l)':pr.state==='open'?'var(--acc-l)':'var(--s2)')+';color:'+stCol+';flex-shrink:0">'+sl+'</span><span style="font-size:11px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+pr.title+'</span><span style="font-size:9px;font-family:var(--mono);color:var(--t3);flex-shrink:0">'+pr.repo+'</span><span style="font-size:9px;color:var(--t3);flex-shrink:0">'+pr.daysOpen+'d</span></a>';}).join(''):'<div style="font-size:11px;color:var(--t3)">No PR data — sync GitHub first</div>')+'</div>':'<div style="padding:20px;text-align:center;font-size:11px;color:var(--t3)">No GitHub data — go to ⚙️ → GitHub to sync</div>';
-  setTimeout(function(){velInit('e',devId);},0);
   panel.style.display='block';
   panel.innerHTML='<div style="padding:14px 16px;max-width:760px;margin:0 auto"><button class="btn" onclick="showTeamMetrics()" style="font-size:10px;margin-bottom:10px">← All engineers</button><button class="btn" onclick="openEditDevModal(\''+devId+'\')" style="font-size:10px;margin:0 0 10px 6px">Edit / remove</button><div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">'+avEl(dev,40)+'<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600">'+dev.name+'</div><div style="display:flex;align-items:center;gap:6px;margin-top:3px;flex-wrap:wrap"><span style="font-size:11px;font-family:var(--mono);color:'+col+';font-weight:600">'+(function(){var pp=allocParts(dev.id);return pp.plan>0?pp.total+'% projected <span style="color:#7C3AED;font-weight:400">('+pp.jira+'% actual + '+pp.plan+' plan)</span>':pp.jira+'% allocated';})()+'</span>'+(dev.offshore?'<span class="off-tag">offshore 🌐</span>':'')+(pct>=cap?'<span style="font-size:10px;color:var(--red)">● over capacity</span>':pct<20?'<span style="font-size:10px;color:var(--grn)">● available</span>':'')+'</div></div></div><div style="display:flex;border-bottom:1px solid var(--bdr);margin-bottom:12px"><button class="vs-btn on" id="tvt-work" onclick="switchDevTab(\'work\')" style="padding:7px 12px">Work</button><button class="vs-btn" id="tvt-gh" onclick="switchDevTab(\'gh\')" style="padding:7px 12px">GitHub</button></div><div id="tvt-work-content">'+workContent+'</div><div id="tvt-gh-content" style="display:none">'+ghContent+'</div></div>';
 }
@@ -2039,6 +2046,25 @@ function availForecast(){
     return {d:d,inProg:active.length+qa.length,qa:qa.length,blocked:blockedT.length,upcoming:todo.length,remaining:remaining,a:a,thr:v,eta:eta,E:E,unit:unit,openPRs:openPRs,src:src,conf:conf};
   });
 }
+function devAvailBlock(devId){
+  var r;try{r=availForecast().find(function(x){return x.d.id===devId;});}catch(e){}
+  if(!r)return '';
+  var CD=null;try{CD=mxCapDelivery();}catch(e){}var cd=CD&&CD.byDev[devId];
+  var free=(r.remaining===0&&!r.blocked)||r.eta===0,col=free?'var(--grn)':r.eta!=null&&r.eta<=7?'var(--amb)':'var(--t2)';
+  var big,sub;
+  if(free){big='Free now';sub='No active or queued work in Jira.';}
+  else if(r.eta==null){big='No estimate';sub=r.blocked&&!r.remaining?'Only blocked tickets are left, so there is nothing to estimate from.':'No finished work or merged PRs to estimate pace from.';}
+  else{var dt=new Date(Date.now()+r.eta*864e5);big='~'+dt.toLocaleDateString('en-US',{month:'short',day:'numeric'});sub='About '+r.eta+' day'+(r.eta===1?'':'s')+' from now at their recent pace.';}
+  var conf={high:['var(--grn)','Based on 3+ finished tickets'],med:['var(--amb)','Rough: little recent history'],none:['var(--t3)','No history to estimate from']}[r.conf];
+  var bits=[r.inProg+' in flight'+(r.qa?' ('+r.qa+' in QA)':''),r.upcoming+' queued'];
+  if(r.openPRs)bits.push(r.openPRs+' open PR'+(r.openPRs>1?'s':''));
+  if(r.remaining)bits.push('~'+Math.round(r.E*10)/10+' '+r.unit+' left');
+  if(r.thr>0)bits.push(Math.round(r.thr*10)/10+' '+r.unit+'/wk ('+r.src+')');
+  if(r.blocked)bits.push(r.blocked+' blocked');
+  var lblCol=cd?(cd.cls==='r'?'var(--red)':cd.cls==='a'?'var(--amb)':'var(--grn)'):'';
+  var tag=cd?'<span style="font-size:11px;font-weight:500;color:'+lblCol+'">'+cd.lbl+'</span><span style="font-size:11px;color:var(--t3)"> · '+cd.done+' '+CD.U+' done in 14 days</span>':'';
+  return '<div style="margin-top:16px;background:var(--sur);border:1px solid var(--bdr);border-radius:var(--r);padding:12px 14px"><div style="font-size:10px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--t3);margin-bottom:8px">Availability</div><div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap"><span style="font-size:20px;font-weight:700;font-family:var(--mono);color:'+col+'">'+big+'</span><span style="font-size:12px;color:var(--t2)">'+sub+'</span></div>'+(tag?'<div style="margin-top:6px">'+tag+'</div>':'')+'<div style="font-size:11px;color:var(--t3);margin-top:8px">'+bits.join(' · ')+'</div><div style="font-size:10px;color:var(--t3);margin-top:6px"><span style="display:inline-block;width:6px;height:6px;border-radius:99px;background:'+conf[0]+';margin-right:5px"></span>'+conf[1]+' · allocation '+r.a+'% · a planning estimate, not a promise</div></div>';
+}
 function etaLabel(r){if(r.remaining===0&&!r.blocked)return 'free now';if(r.eta==null)return '~';if(r.eta===0)return 'free now';var dt=new Date(Date.now()+r.eta*864e5);return '~'+dt.toLocaleDateString('en-US',{month:'short',day:'numeric'});}
 function openAvailabilityForecast(){
   const rows=availForecast();
@@ -2050,11 +2076,14 @@ function openAvailabilityForecast(){
   const later=rest.filter(r=>r.eta!=null&&r.eta>14);
   const unk=rest.filter(r=>r.eta==null);
   const confCol={high:'var(--grn)',med:'var(--amb)',none:'var(--t3)'},confTxt={high:'Based on 3+ completed tickets',med:'Rough: little recent history',none:'No history to estimate from'};
-  const row=r=>{const c=ac(r.a,r.d.capacity||100);
+  const CD=(function(){try{return mxCapDelivery();}catch(e){return null;}})();
+  const row=r=>{const c=ac(r.a,r.d.capacity||100);const cd=CD&&CD.byDev[r.d.id];
     const bits=[r.inProg+' in flight'+(r.qa?' ('+r.qa+' in QA)':''),r.upcoming+' queued'];if(r.openPRs)bits.push(r.openPRs+' open PR'+(r.openPRs>1?'s':''));
     if(r.remaining)bits.push('~'+Math.round(r.E*10)/10+' '+r.unit+' left');
     if(r.thr>0)bits.push(Math.round(r.thr*10)/10+' '+r.unit+'/wk ('+r.src+')');
-    return '<div onclick="closeModal();flowToDev(\''+r.d.id+'\')" style="display:flex;align-items:center;gap:9px;padding:8px 8px;border-radius:var(--r);cursor:pointer">'+avEl(r.d,26)+'<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+r.d.name+(r.d.offshore?' <span class="off-tag">off</span>':'')+(r.blocked?' <span style="font-size:10px;font-weight:500;color:var(--red)">'+r.blocked+' blocked</span>':'')+'</div><div style="font-size:10px;color:var(--t3)">'+bits.join(' · ')+'</div></div><span style="font-size:10px;font-family:var(--mono);color:'+c+'">'+r.a+'%</span><span title="'+confTxt[r.conf]+'" style="width:6px;height:6px;border-radius:99px;background:'+confCol[r.conf]+';flex-shrink:0"></span><span style="font-size:11px;font-weight:600;font-family:var(--mono);color:'+(r.remaining===0||r.eta===0?'var(--grn)':r.eta!=null&&r.eta<=7?'var(--amb)':'var(--t2)')+';min-width:58px;text-align:right">'+etaLabel(r)+'</span></div>';};
+    if(cd)bits.push(cd.done+' '+CD.U+' done (14d)');
+    const lblH=(cd&&cd.lbl!=='Healthy')?' <span style="font-size:10px;font-weight:500;padding:1px 7px;border-radius:99px;margin-left:4px;color:'+(cd.cls==='r'?'var(--red)':cd.cls==='a'?'var(--amb)':'var(--grn)')+';background:'+(cd.cls==='r'?'rgba(217,45,32,.12)':cd.cls==='a'?'rgba(217,119,6,.14)':'rgba(22,163,74,.12)')+'">'+cd.lbl+'</span>':'';
+    return '<div onclick="closeModal();flowToDev(\''+r.d.id+'\')" style="display:flex;align-items:center;gap:9px;padding:8px 8px;border-radius:var(--r);cursor:pointer">'+avEl(r.d,26)+'<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+r.d.name+(r.d.offshore?' <span class="off-tag">off</span>':'')+(lblH||(r.blocked?' <span style="font-size:10px;font-weight:500;color:var(--red)">'+r.blocked+' blocked</span>':''))+'</div><div style="font-size:10px;color:var(--t3)">'+bits.join(' · ')+'</div></div><span style="font-size:10px;font-family:var(--mono);color:'+c+'">'+r.a+'%</span><span title="'+confTxt[r.conf]+'" style="width:6px;height:6px;border-radius:99px;background:'+confCol[r.conf]+';flex-shrink:0"></span><span style="font-size:11px;font-weight:600;font-family:var(--mono);color:'+(r.remaining===0||r.eta===0?'var(--grn)':r.eta!=null&&r.eta<=7?'var(--amb)':'var(--t2)')+';min-width:58px;text-align:right">'+etaLabel(r)+'</span></div>';};
   const grp=(title,arr,col,note)=>arr.length?'<div style="margin-bottom:14px"><div style="font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:'+col+';margin-bottom:4px">'+title+' ('+arr.length+')</div>'+(note?'<div style="font-size:10px;color:var(--t3);margin-bottom:4px">'+note+'</div>':'')+arr.sort((a,b)=>(a.eta==null?1e9:a.eta)-(b.eta==null?1e9:b.eta)||a.a-b.a).map(row).join('')+'</div>':'';
   // where they could go: active projects with nobody on them
   const need=projects.filter(p=>!p.archived&&p.status!=='done'&&p.status!=='planned'&&!(assignments[p.id]||[]).length&&!(p.sig&&p.sig.length)).sort((a,b)=>urgScore(a)-urgScore(b)).slice(0,5);
