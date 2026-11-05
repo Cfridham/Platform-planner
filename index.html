@@ -1707,9 +1707,9 @@ function renderTeamView(){
   const et=window.engTickets||{};
   const withTk=tvDevs().filter(d=>et[d.id]&&et[d.id].tickets&&et[d.id].tickets.length);
   const totTk=withTk.reduce((s,d)=>s+et[d.id].tickets.filter(tkShown).length,0),totPts=withTk.reduce((s,d)=>s+engStats(et[d.id]).tot,0);
-  const _sc=tvDevs().map(capScore);const overCap=_sc.filter(r=>r.bucket==='cap').length,avail=_sc.filter(r=>r.bucket==='free').length;
+  const _sc=tvDevs().map(capScore);const _bc=capBandCounts(tvDevs()),overCap=_bc.Overloaded,avail=_bc.Available;
   el.innerHTML='<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">'+
-    '<div style="padding:10px 14px 9px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;flex-shrink:0"><div><div style="font-size:12px;font-weight:600">People</div><div style="font-size:10px;color:var(--t3);margin-top:1px">'+tvDevs().length+(window._teamFilter==='off'?' offshore':window._teamFilter==='on'?' onshore':vendorById(window._teamFilter)?' '+vendorById(window._teamFilter).name:'')+' engineers · '+overCap+' at capacity · '+avail+' free</div></div><div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end"><button class="fb" onclick="openShareWork()">Share current work</button><button class="fb" onclick="openAvailabilityForecast()">Who\'s free</button><button class="fb" id="tv-tickets-btn" onclick="switchTeamSubview(\'tickets\')">All tickets</button><button class="fb" onclick="openManageTeam()">Manage</button></div></div>'+
+    '<div style="padding:10px 14px 9px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;flex-shrink:0"><div><div style="font-size:12px;font-weight:600">People</div><div style="font-size:10px;color:var(--t3);margin-top:1px">'+tvDevs().length+(window._teamFilter==='off'?' offshore':window._teamFilter==='on'?' onshore':vendorById(window._teamFilter)?' '+vendorById(window._teamFilter).name:'')+' engineers · '+overCap+' overloaded · '+avail+' available</div></div><div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end"><button class="fb" onclick="openShareWork()">Share current work</button><button class="fb" onclick="openAvailabilityForecast()">Who\'s free</button><button class="fb" id="tv-tickets-btn" onclick="switchTeamSubview(\'tickets\')">All tickets</button><button class="fb" onclick="openManageTeam()">Manage</button></div></div>'+
     '<div id="tv-grid" style="flex:1;overflow-y:auto;padding:14px">'+leadsStrip()+renderEngProgressGrid()+'</div>'+
     '<div id="tv-detail-panel" style="display:none;position:absolute;inset:0;background:var(--bg);z-index:6;overflow-y:auto"></div>'+
     '<div id="tv-heat-section" style="display:none;position:absolute;inset:0;background:var(--bg);z-index:5;overflow:auto;padding:14px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><div style="font-size:13px;font-weight:600">Team Heatmap</div><button class="btn" onclick="switchTeamSubview(\'roster\')">← Back</button></div><div id="tv-heat-content"></div></div>'+
@@ -1805,15 +1805,50 @@ function switchTeamSubview(sub){
   else if(sub==='tickets'){if(tkSec)tkSec.style.display='flex';if(tkBtn)tkBtn.classList.add('on');const target=document.getElementById('tv-tickets-content');if(target)target.innerHTML=renderEngBreakdown();}
 }
 // ── Engineer ticket breakdown (Jira) ──
+/* ---- Allocation as a band + weeks of queued work (own pace), with planned split and confidence flags ---- */
+var CB_ORDER={Overloaded:0,Stretched:1,Balanced:2,Available:3};
+function capBands(){
+  var af={};try{availForecast().forEach(function(r){af[r.d.id]=r;});}catch(e){}
+  var data=velData(),pm=ptsMode(),DAY=864e5,now=Date.now(),cfg=velCfg(),c2={unit:pm?'points':'issues'},et=window.engTickets||{},out={};
+  devs.forEach(function(d){
+    var r=af[d.id];if(!r){return;}
+    var pace=0,src='';
+    if(data&&data.items&&data.items[d.id]){var dn=0;data.items[d.id].forEach(function(it){if(velInc(it,cfg.rule)&&it[1]>=now-42*DAY)dn+=velW(it,c2);});if(dn>0){pace=dn/6;src='last 6 wks';}}
+    if(!(pace>0)&&r.thr>0){pace=r.thr;src=r.src;}
+    var tk=((et[d.id]||{}).tickets)||[],live=tk.filter(function(t){var c=tkCat(t.st);return ((c==='active'||c==='qa')&&tkFresh(t))||(c==='todo'&&tkUpcoming(t));});
+    var unest=pm?live.filter(function(t){return !(t.p>0);}).length:0;
+    var weeks=null;
+    if(r.remaining===0)weeks=0;else if(pace>0)weeks=Math.round(r.E/pace*10)/10;
+    var sc=capScore(d),band,fallback=false;
+    if(weeks!=null&&!(r.remaining===0&&r.blocked)){band=weeks<1?'Available':weeks<2.5?'Balanced':weeks<4?'Stretched':'Overloaded';}
+    else{fallback=true;band=sc.bucket==='free'?'Available':sc.bucket==='room'?'Balanced':sc.bucket==='busy'?'Stretched':'Overloaded';if(r.remaining===0&&r.blocked)band='Stretched';}
+    var flags=[];
+    if(unest>=2&&unest/Math.max(1,live.length)>=0.3)flags.push(unest+' of '+live.length+' tickets have no estimate');
+    if(r.blocked>=2)flags.push(r.blocked+' blocked tickets, queue may not move');
+    else if(r.blocked>=1&&r.remaining===0)flags.push(r.blocked+' blocked, nothing else queued');
+    if(weeks==null)flags.push('no finished work in 6 weeks, pace unknown');
+    var plan=[];projects.forEach(function(p){if(p.archived||p.status==='done')return;(assignments[p.id]||[]).forEach(function(a){if(a.devId===d.id&&a.src==='plan')plan.push({n:p.name,pct:a.pct});});});
+    out[d.id]={band:band,weeks:weeks,pace:pace,src:src,E:r.E,unit:r.unit,inProg:r.inProg,upcoming:r.upcoming,blocked:r.blocked,flags:flags.slice(0,2),plan:plan,old:Math.round(sc.total),fallback:fallback,unest:unest,openPRs:r.openPRs};
+  });
+  return out;
+}
+function cbCol(b){return b==='Overloaded'?['var(--red)','rgba(217,45,32,.12)']:b==='Stretched'?['var(--amb)','rgba(217,119,6,.14)']:b==='Balanced'?['var(--blu)','rgba(37,99,235,.12)']:['var(--grn)','rgba(22,163,74,.12)'];}
+function capBandCounts(arr){var n={Available:0,Balanced:0,Stretched:0,Overloaded:0};var B=capBands();arr.forEach(function(d){if(B[d.id])n[B[d.id].band]++;});return n;}
+function engCardV2(d,B){
+  var x=B[d.id];if(!x)return '';var c=cbCol(x.band),esc=function(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');};
+  var wk=x.weeks==null?'<span style="font-size:13px;color:var(--t3)">pace unknown</span>':'<b style="font-size:18px;font-family:var(--mono);color:var(--t)">'+(x.weeks===0?'0':'~'+x.weeks)+' wk'+(x.weeks===1?'':'s')+'</b> <span style="font-size:12px;color:var(--t2)">of work queued</span>';
+  var barW=x.weeks==null?Math.min(100,Math.max(4,x.old/2)):Math.min(100,Math.round(x.weeks/4*100));
+  var pl=x.plan.length?'Planned: <b style="font-weight:600">'+x.plan.slice(0,2).map(function(p){return esc(String(p.n).slice(0,16))+' '+p.pct+'%';}).join(' · ')+(x.plan.length>2?' +'+(x.plan.length-2):'')+'</b>':'Planned: <b style="font-weight:600">none</b>';
+  var meta=[];if(x.blocked)meta.push(x.blocked+' blocked');meta.push(x.inProg+' in flight');if(x.upcoming)meta.push(x.upcoming+' queued');if(x.pace>0)meta.push('~'+Math.round(x.pace*10)/10+' '+x.unit+'/wk pace');
+  var tip='Why this reads '+x.band+'\nOpen work (weighted): '+Math.round(x.E*10)/10+' '+x.unit+'\nPace ('+(x.src||'none')+'): '+(x.pace>0?Math.round(x.pace*10)/10+' '+x.unit+'/wk':'unknown')+'\nOpen PRs: '+x.openPRs+'\nTickets without estimate: '+x.unest+'\nOld capacity score: '+x.old+'%'+(x.fallback?'\n(Band from the capacity score: not enough pace data)':'');
+  return '<div class="eng-card" onclick="openTeamDevDetail(\''+d.id+'\')"><div style="display:flex;align-items:center;gap:9px">'+avEl(d,32)+'<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(d.name)+vTag(d)+(leadOfDev(d.id)?' <span style="font-size:9px;font-weight:500;color:var(--t3)" title="Also a project lead">◆ Lead</span>':'')+'</div><div style="font-size:10px;color:var(--t3)">'+esc(d.role||'Engineer')+'</div></div><span title="'+esc(tip)+'" style="font-size:11px;font-weight:600;padding:2px 9px;border-radius:99px;white-space:nowrap;color:'+c[0]+';background:'+c[1]+'">'+x.band+'</span></div><div style="margin:10px 0 5px">'+wk+'</div><div style="height:5px;background:var(--s2);border-radius:99px;overflow:hidden"><div style="width:'+barW+'%;height:100%;background:'+c[0]+'"></div></div><div style="font-size:11px;color:var(--t2);margin-top:7px">'+pl+'</div><div style="font-size:10px;color:var(--t3);margin-top:3px;line-height:1.5">'+meta.join(' · ')+'</div>'+x.flags.map(function(t){return '<div style="display:inline-block;font-size:10px;color:var(--amb);background:rgba(217,119,6,.12);border-radius:99px;padding:1px 8px;margin-top:5px;margin-right:4px">'+esc(t)+'</div>';}).join('')+'</div>';
+}
 function renderEngProgressGrid(){
-  const et=window.engTickets||{};
-  const withTk=gridDevs().filter(d=>et[d.id]&&et[d.id].tickets&&et[d.id].tickets.length).map(d=>({d:d,s:engStats(et[d.id]),rec:et[d.id]})).sort((a,b)=>b.s.tot-a.s.tot);
-  const noTk=gridDevs().filter(d=>!(et[d.id]&&et[d.id].tickets&&et[d.id].tickets.length));
-  const card=(d,s,rec)=>{var sc=capScore(d);var L=devLoad(d.id);var C=capCfg();var col=sc.total>C.busy?'var(--red)':sc.total>=C.room?'var(--amb)':sc.total>=C.free?'var(--acc)':'var(--grn)';var sig=Math.round(sc.total)+'% of capacity'+(L.n>0?' \u00b7 '+L.n+' in flight':'');var load=sc.total<C.free?0:sc.total;var barW=Math.min(100,Math.max(4,Math.round(sc.total)));return '<div class="eng-card" onclick="openTeamDevDetail(\''+d.id+'\')"><div style="display:flex;align-items:center;gap:9px;margin-bottom:9px">'+avEl(d,32)+'<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+d.name+vTag(d)+(leadOfDev(d.id)?' <span style="font-size:9px;font-weight:500;color:var(--t3)" title="Also a project lead">\u25c6 Lead</span>':'')+'</div><div style="font-size:10px;margin-top:1px;color:'+(load===0?'var(--grn)':'var(--t2)')+'">'+sig+'</div></div></div><div style="height:5px;background:var(--s2);border-radius:99px;overflow:hidden"><div style="width:'+barW+'%;height:100%;background:'+col+'"></div></div></div>';};
-  withTk.sort(function(a,b){return capScore(b.d).total-capScore(a.d).total;});const cards=withTk.map(x=>card(x.d,x.s,x.rec)).join('');
-  const others=noTk.length?'<div style="grid-column:1/-1;font-size:10px;color:var(--t3);margin:6px 0 2px">No tickets</div>'+noTk.map(d=>{const pct=Math.round(capScore(d).total);return '<div class="eng-card eng-card-muted" onclick="openTeamDevDetail(\''+d.id+'\')"><div style="display:flex;align-items:center;gap:9px">'+avEl(d,28)+'<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+d.name+vTag(d)+'</div><div style="font-size:10px;color:var(--t3)">'+(d.role||'Engineer')+(pct?' · '+pct+'% of capacity':'')+'</div></div></div></div>';}).join(''):'';
-  const legend='<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:14px;font-size:10px;color:var(--t2)">'+[['Done','var(--grn)'],['Active','var(--acc)'],['QA','#7C3AED'],['To Do','var(--t3)']].map(([l,c])=>'<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:2px;background:'+c+'"></span>'+l+'</span>').join('')+'</div>';
-  return teamFilterChips()+'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px">'+cards+others+'</div>'+vendPanels();
+  const B=capBands();
+  const list=gridDevs().filter(d=>B[d.id]).sort((a,b)=>{const x=B[a.id],y=B[b.id];return (CB_ORDER[x.band]-CB_ORDER[y.band])||((y.weeks==null?-1:y.weeks)-(x.weeks==null?-1:x.weeks))||(y.old-x.old);});
+  const n={Available:0,Balanced:0,Stretched:0,Overloaded:0};list.forEach(d=>n[B[d.id].band]++);
+  const chips='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">'+['Available','Balanced','Stretched','Overloaded'].map(k=>{const c=cbCol(k);return '<span style="font-size:12px;padding:3px 11px;border-radius:99px;border:1px solid var(--bdr);background:var(--sur)"><b style="font-weight:600;color:'+c[0]+'">'+n[k]+'</b> '+k+'</span>';}).join('')+'<span title="Band = weeks of open work at each person\'s own recent pace: under 1 wk Available, under 2.5 Balanced, under 4 Stretched, 4+ Overloaded. Hover a band for the details." style="font-size:11px;color:var(--t3);align-self:center;cursor:help">ⓘ</span></div>';
+  return teamFilterChips()+chips+'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px">'+list.map(d=>engCardV2(d,B)).join('')+'</div>'+vendPanels();
 }
 // ── Engineer ticket breakdown (Jira) ──
 function tkCat(st){st=(st||'').toLowerCase().trim();if(st==='done'||st==='ready for release'||st==='closed'||st==='resolved'||st==='released'||st==='complete'||st==='completed')return 'done';if(st.indexOf('qa')>=0||st.indexOf('review - qa')>=0||st.indexOf('testing')>=0)return 'qa';if(st.indexOf('block')>=0||st.indexOf('hold')>=0||st.indexOf('impediment')>=0)return 'blocked';if(st==='to do'||st.indexOf('ready for dev')>=0||st==='backlog'||st==='open'||st==='new'||st.indexOf('selected for dev')>=0||st==='ready'||st==='reopened'||st==='ready for development')return 'todo';return 'active';}function tkStateWeight(st){var c=tkCat(st);return c==='active'?1:c==='qa'?0.5:c==='blocked'?0.5:c==='todo'?0.35:0;}
