@@ -623,7 +623,7 @@ window.engTickets=(function(){try{const d=localStorage.getItem('plt_eng_tickets'
 
 // ---- Shared state: the plan (projects, people, assignments, leads, notes) lives on the server so everyone sees the same thing ----
 var _st={rev:+(localStorage.getItem('plt_state_rev')||0),timer:null,ok:null,busy:false,dirty:false};
-function stKeys(){return {sk:SK,leads:'plt_leads_v1',removed:'plt_removed_devs',parked:'plt_autoparked',repomap:'plt_repo_map'};}
+function stKeys(){return {sk:SK,leads:'plt_leads_v1',removed:'plt_removed_devs',parked:'plt_autoparked',repomap:'plt_repo_map',loadhist:'plt_load_hist'};}
 function stSnapshot(){var k=stKeys(),o={};Object.keys(k).forEach(function(n){o[n]=localStorage.getItem(k[n]);});return o;}
 function stNorm(snap){try{var o={};Object.keys(snap||{}).forEach(function(k){var v=snap[k];if(k==='sk'&&v){try{var j=JSON.parse(v);delete j.collapseState;if(j.assignments){Object.keys(j.assignments).forEach(function(k){j.assignments[k]=(j.assignments[k]||[]).filter(function(a){return a&&a.src!=='jira';});});}(j.projects||[]).forEach(function(p){['openN','sig','sigDone','ext','extDone'].forEach(function(x){delete p[x];});});(j.devs||[]).forEach(function(d){delete d.avatar;});v=JSON.stringify(j);}catch(e){}}o[k]=v;});return JSON.stringify(o);}catch(e){return String(Math.random());}}
 function stBanner(cur){if(document.getElementById('st-banner'))return;var b=document.createElement('div');b.id='st-banner';b.style.cssText='position:fixed;top:0;left:50%;transform:translateX(-50%);z-index:9999;background:var(--t,#1a1a1a);color:var(--bg,#fff);font-size:12px;padding:8px 14px;border-radius:0 0 10px 10px;display:flex;gap:12px;align-items:center;box-shadow:0 2px 10px rgba(0,0,0,.2)';b.innerHTML='<span>Someone updated the plan.</span><button style="background:transparent;border:1px solid currentColor;color:inherit;border-radius:6px;padding:2px 10px;cursor:pointer;font-size:12px">Refresh</button>';b.querySelector('button').onclick=function(){stAdopt(cur,'');};document.body.appendChild(b);}
@@ -2363,7 +2363,7 @@ function renderMetricsView(){
   el.innerHTML='<div style="max-width:1100px;margin:0 auto;padding:20px 24px">'+
     '<div style="font-size:18px;font-weight:700;margin-bottom:2px">Team metrics</div>'+
     '<div style="font-size:11px;color:var(--t3);margin-bottom:16px">'+(km.asOf?'as of '+km.asOf:'sync from Jira to populate')+'</div>'+
-    summary+tiles+
+    summary+(function(){try{return trCharts();}catch(e){return '';}})()+tiles+
     '<div class="chart-card" id="mx-vel" style="margin-bottom:12px"><div id="vel-m"></div></div>'+'<div id="mx-extra">'+(function(){try{return mxExtraHTML();}catch(e){return '';}})()+'</div>'+
     '<div style="font-size:10px;color:var(--t3);margin-top:10px;line-height:1.5">Completed counts come from Jira resolution dates. \u201cIn progress\u201d counts only tickets touched in the last 30 days; older ones are tucked away under \u201cinclude older\u201d.</div>'+
   '</div>';
@@ -2651,6 +2651,83 @@ function devLoad(devId){var t=((window.engTickets||{})[devId]||{}).tickets||[];v
 function attnGo(kind,id){if(kind==='dev'){flowToDev(id);}else{setView('board');setTimeout(function(){selProject(id);},80);}}
 function dismissAttn(pid){const p=projects.find(x=>x.id===pid);if(!p)return;p.attnHide=true;save();if(view==='overview')renderOverview();showToast('Snoozed from attention','info');}
 function clearAttnHide(){projects.forEach(p=>{if(p.attnHide)delete p.attnHide;});save();if(view==='overview')renderOverview();}
+
+/* ===== Trends ===== */
+function trMon(){return mxIso(mxWeeks()[7]);}
+function trLoadHist(){try{return JSON.parse(localStorage.getItem('plt_load_hist')||'{}')||{};}catch(e){return {};}}
+function trLoadNow(){try{var B=capBands(),n=0,hot=0,known=0;devs.forEach(function(d){if(d.qa||!B[d.id])return;n++;if(!B[d.id].fallback)known++;if(B[d.id].band==='Stretched'||B[d.id].band==='Overloaded')hot++;});if(n<5||known<n*0.6)return null;return {n:n,hot:hot,pct:Math.round(hot/n*100)};}catch(e){return null;}}
+function trLoadSnap(){
+  try{
+    if(!window.engTickets||!Object.keys(window.engTickets).length)return;
+    var H=trLoadHist(),k=trMon();if(H[k])return;
+    var c=trLoadNow();if(!c)return;
+    H[k]={p:c.pct,n:c.n};
+    var ks=Object.keys(H).sort();if(ks.length>26)ks.slice(0,ks.length-26).forEach(function(x){delete H[x];});
+    localStorage.setItem('plt_load_hist',JSON.stringify(H));try{stPush();}catch(e){}
+  }catch(e){}
+}
+function trAvg(a){var v=a.filter(function(x){return x!=null;});return v.length?v.reduce(function(s,x){return s+x;},0)/v.length:null;}
+function trNeedSync(km){
+  if(km&&km.cycW)return false;
+  if(window.__trSync)return false;
+  try{if(!jiraReady())return false;}catch(e){return false;}
+  window.__trSync=1;setTimeout(function(){try{syncKanbanMetrics(true).catch(function(){});}catch(e){}},300);return true;
+}
+function trData(){
+  var km=window.kanbanMetrics||{};
+  var cut=function(a){return a?a.slice(0,Math.max(0,a.length-1)):[];};
+  var d={thru:cut(km.thru),cyc:cut(km.cycW),flow:cut(km.flowW),qa:km.qaW||[],has:!!(km.thru&&km.thru.length),hasCyc:!!km.cycW};
+  var wk=mxWeeks().slice(0,7).map(function(ms){var x=new Date(ms);return (x.getMonth()+1)+'/'+x.getDate();});d.labels=wk;
+  return d;
+}
+function trSpark(v,up){return '';}
+function trStrip(){
+  var km=window.kanbanMetrics;trNeedSync(km);
+  var D=trData();if(!D.has)return '';
+  var last=function(a){return a.length?a[a.length-1]:null;},prior=function(a){return trAvg(a.slice(Math.max(0,a.length-5),a.length-1));};
+  var cell=function(lbl,val,delta,good,sub){var c=delta==null?'var(--t3)':(good?'var(--grn)':'var(--red)');return '<div onclick="setView(\'metrics\')" style="flex:1;min-width:150px;padding:2px 16px;border-right:1px solid var(--bdr);cursor:pointer"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--t3)">'+lbl+'</div><div style="display:flex;align-items:baseline;gap:8px;margin-top:2px"><span style="font-size:20px;font-weight:700;font-family:var(--mono)">'+val+'</span><span style="font-size:11px;color:'+c+'">'+(delta||sub||'')+'</span></div></div>';};
+  var cells='';
+  var t=last(D.thru),tp=prior(D.thru);
+  cells+=cell('Delivered',t==null?'—':t,(t!=null&&tp)?((t>=tp?'▲ ':'▼ ')+Math.abs(Math.round((t-tp)/tp*100))+'%'):null,t>=tp);
+  var c=last(D.cyc),cp=prior(D.cyc);
+  cells+=cell('Cycle time',c==null?'—':c+'d',(c!=null&&cp)?((c<=cp?'▼ ':'▲ ')+Math.abs(Math.round((c-cp)/cp*100))+'% '+(c<=cp?'faster':'slower')):null,c<=cp,D.hasCyc?'':'loading…');
+  var f=last(D.flow),fp=prior(D.flow);
+  cells+=cell('Flow efficiency',f==null?'—':f+'%',(f!=null&&fp!=null)?((f>=fp?'▲ ':'▼ ')+Math.abs(Math.round(f-fp))+' pts'):null,f>=fp,D.hasCyc?'':'loading…');
+  var L=trLoadNow(),H=trLoadHist(),ks=Object.keys(H).sort().filter(function(k){return k!==trMon();}),pl=ks.length?H[ks[ks.length-1]].p:null;
+  cells+=cell('Stretched or over',L?L.pct+'%':'—',(L&&pl!=null)?((L.pct>pl?'▲ ':L.pct<pl?'▼ ':'→ ')+Math.abs(L.pct-pl)+' pts'):null,L&&pl!=null&&L.pct<=pl,'of team');
+  cells=cells.replace(/border-right:1px solid var\(--bdr\);cursor:pointer"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var\(--t3\)">Stretched/,'cursor:pointer"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--t3)">Stretched');
+  return '<div style="margin:0 0 20px"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px"><span style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--t3)">Last week vs 4-week average</span><a onclick="setView(\'metrics\')" style="font-size:11px;color:var(--acc);cursor:pointer">See all trends →</a></div><div class="dash-panel" style="display:flex;flex-wrap:wrap;gap:10px 0;padding:12px 0">'+cells+'</div></div>';
+}
+function trChart(vals,labels,col,o){
+  o=o||{};var W=420,Hh=150,L=34,R=12,T=10,B=24;
+  var nums=vals.filter(function(x){return x!=null;});
+  if(nums.length<2)return '<div style="height:'+Hh+'px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--t3);border:1px dashed var(--bdr);border-radius:var(--r2);text-align:center;padding:0 16px">'+(o.empty||'Not enough history yet')+'</div>';
+  var max=Math.max.apply(null,nums),mx=o.max!=null?o.max:Math.max(1,Math.ceil(max*1.2/(max>20?5:max>6?2:1))*(max>20?5:max>6?2:1));
+  var X=function(i){return L+(vals.length>1?i*(W-L-R)/(vals.length-1):0);},Y=function(v){return T+(Hh-T-B)*(1-v/mx);};
+  var g='';[0,.5,1].forEach(function(f){var y=T+(Hh-T-B)*(1-f);g+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y+'" y2="'+y+'" stroke="var(--bdr)" stroke-width="1"/><text x="'+(L-5)+'" y="'+(y+3)+'" text-anchor="end" font-size="9" fill="var(--t3)">'+(Math.round(mx*f*10)/10)+(o.unit||'')+'</text>';});
+  var pts=[],d='';vals.forEach(function(v,i){if(v==null)return;pts.push([i,v]);d+=(d?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1);});
+  var base=o.avg!=null?o.avg:trAvg(vals.slice(Math.max(0,vals.length-5),vals.length-1));
+  var av=base!=null?'<line x1="'+L+'" x2="'+(W-R)+'" y1="'+Y(base)+'" y2="'+Y(base)+'" stroke="'+col+'" stroke-width="1" stroke-dasharray="4 3" opacity=".55"/>':'';
+  var dots=pts.map(function(q,k){var last=k===pts.length-1;return '<circle cx="'+X(q[0]).toFixed(1)+'" cy="'+Y(q[1]).toFixed(1)+'" r="'+(last?4:2.8)+'" fill="'+col+'"'+(o.click?' onclick="'+o.click.replace('%i',q[0])+'" style="cursor:pointer"':'')+'><title>'+labels[q[0]]+': '+q[1]+(o.unit||'')+'</title></circle>';}).join('');
+  var xl='';labels.forEach(function(l,i){if(i%2===0||i===labels.length-1)xl+='<text x="'+X(i)+'" y="'+(Hh-6)+'" text-anchor="middle" font-size="9" fill="var(--t3)">'+l+'</text>';});
+  return '<svg viewBox="0 0 '+W+' '+Hh+'" style="width:100%;height:auto;overflow:visible">'+g+av+'<path d="'+d+'" fill="none" stroke="'+col+'" stroke-width="2" stroke-linejoin="round"/>'+dots+xl+'</svg>';
+}
+function trCard(title,right,body,note,click){return '<div class="chart-card" style="margin:0"'+(click?' ':'')+'><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px"><div class="chart-title" style="margin:0">'+title+'</div><div style="font-size:11px;color:var(--t2)">'+right+'</div></div>'+body+(note?'<div style="font-size:10px;color:var(--t3);margin-top:6px">'+note+'</div>':'')+'</div>';}
+function trCharts(){
+  var km=window.kanbanMetrics;trNeedSync(km);trLoadSnap();
+  var D=trData();if(!D.has)return '';
+  var last=function(a){return a.length?a[a.length-1]:null;},prior=function(a){return trAvg(a.slice(Math.max(0,a.length-5),a.length-1));};
+  var fmt=function(v,u){return v==null?'—':(Math.round(v*10)/10)+(u||'');};
+  var wait=D.hasCyc?'':'Reading Jira history…';
+  var c1=trCard('Delivered per week','<b style="color:var(--grn)">'+fmt(last(D.thru))+'</b> last wk · avg '+fmt(prior(D.thru)),trChart(D.thru,D.labels,'#16a34a',{click:'openDoneWeek(null,%i)'}),'Tickets finished each week. Click a dot to see them.');
+  var c2=trCard('Cycle time (median days)','<b>'+fmt(last(D.cyc),'d')+'</b> last wk · avg '+fmt(prior(D.cyc),'d'),trChart(D.cyc,D.labels,'#4f46e5',{unit:'d',empty:wait||'Not enough finished tickets yet'}),'Lower is better. First move to In Dev until Done.');
+  var c3=trCard('Flow efficiency','<b style="color:var(--amb)">'+fmt(last(D.flow),'%')+'</b> last wk · avg '+fmt(prior(D.flow),'%'),trChart(D.flow,D.labels,'#d97706',{unit:'%',max:100,empty:wait||'Not enough finished tickets yet',click:'openFlowEff()'}),'Share of cycle time spent in active work. 40%+ is healthy.');
+  var H=trLoadHist(),ks=Object.keys(H).sort(),cur=trLoadNow();
+  var lv=ks.map(function(k){return H[k].p;}),ll=ks.map(function(k){var q=k.split('-');return (+q[1])+'/'+(+q[2]);});
+  var c4=trCard('Team load','<b style="color:var(--red)">'+(cur?cur.pct+'%':'—')+'</b> stretched or over',trChart(lv,ll,'#dc2626',{unit:'%',max:100,empty:'Recording one snapshot a week from today ('+lv.length+' so far). The line fills in as weeks pass.'}),'Saved once a week so everyone sees the same history.');
+  var qv=D.qa,qc=trCard('QA queue','<b style="color:#7C3AED">'+fmt(last(qv))+'</b> waiting now · avg '+fmt(prior(qv)),trChart(qv,D.labels.concat(['now']),'#7C3AED',{empty:wait||'No QA history yet'}),'Tickets sitting in a QA state at the end of each week. Rises when dev outpaces QA.');
+  return '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);margin:4px 0 8px">Trends · last 7 weeks, dashed line = 4-week average</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;margin-bottom:18px">'+c1+c2+c3+c4+qc+'</div>';
+}
 function renderOverview(){
   const el=document.getElementById('overview-view');if(!el)return;
   try{return renderOverviewInner(el);}catch(err){el.innerHTML='<div style="padding:30px;color:var(--t3);font-size:13px">Overview hit an error rendering. Try ⟳ Refresh, or reload. <div style="font-size:11px;margin-top:8px;color:var(--red)">'+String(err).slice(0,120)+'</div></div>';}
@@ -2794,7 +2871,7 @@ function renderOverviewInner(el){
   el.innerHTML='<div class="dash">'+
     '<div class="dash-hello"><div class="dash-hi">'+(execMode?'PLT Overview':greeting)+'</div><div class="dash-date">'+(execMode?'As of '+asOf:asOf)+(execMode?' \u00b7 <span class="exec-badge">Exec view</span>':'')+'</div></div>'+
     '<div class="dash-status">'+statusLine2+'</div>'+
-    decisionsBlock+projectsBlock+peopleBlock+moreHTML+
+    (function(){try{trLoadSnap();return trStrip();}catch(e){return '';}})()+decisionsBlock+projectsBlock+peopleBlock+moreHTML+
     '</div>';
   animateCounts();
 }
@@ -3437,7 +3514,7 @@ async function syncKanbanMetrics(silent){
     const WORK=(localStorage.getItem('plt_working_states')||'in dev,in development,code review,bugs in progress').split(',').map(s=>s.trim().toLowerCase()).filter(Boolean);
     const isWork=st=>WORK.indexOf((st||'').toLowerCase().trim())>=0;
     const isBlk=st=>{const s=(st||'').toLowerCase();return s.indexOf('block')>=0||s.indexOf('hold')>=0;};
-    let totActive=0,totCycle=0;const blockedDurs=[];let blockedCount=0,analyzedCount=0;
+    let totActive=0,totCycle=0;const doneRec=[],flowRec=[],qaSp=[];const blockedDurs=[];let blockedCount=0,analyzedCount=0;
     issues.forEach(is=>{const f=is.fields||{};
       const dev=_matchDev(f.assignee);const did=dev?dev.id:null;
       const trans=[];((is.changelog&&is.changelog.histories)||[]).forEach(h=>{const at=Date.parse(h.created);(h.items||[]).forEach(it=>{if(it.field==='status')trans.push({at:at,to:(it.toString||''),from:(it.fromString||'')});});});
@@ -3450,17 +3527,18 @@ async function syncKanbanMetrics(silent){
       const created=Date.parse(f.created)||(trans.length?trans[0].at:now);
       const tl=[{st:(trans.length?trans[0].from:((f.status&&f.status.name)||'')),at:created}];
       trans.forEach(t=>tl.push({st:t.to,at:t.at}));
-      const endLife=(curCat==='done'&&doneT)?doneT:now;
+      const endLife=(curCat==='done'&&doneT)?doneT:now;{const _sp=[];for(let i=0;i<tl.length;i++){const s0=tl[i].at,e0=(i+1<tl.length?tl[i+1].at:endLife);if(e0>s0&&tkCat(tl[i].st)==='qa')_sp.push([s0,e0]);}if(_sp.length)qaSp.push(_sp);}
       let blk=0;for(let i=0;i<tl.length;i++){const s=tl[i].at,e=(i+1<tl.length?tl[i+1].at:endLife);if(e>s&&isBlk(tl[i].st))blk+=(e-s);}
       if(startT!=null){analyzedCount++;if(blk>0){blockedCount++;blockedDurs.push(blk/DAY);}}
-      if(curCat==='done'&&doneT){doneTimes.push(doneT);const cy=(startT&&doneT>startT)?(doneT-startT)/DAY:null;if(cy!=null)cycles.push(cy);if(did){(dvDone[did]=dvDone[did]||[]).push(doneT);if(cy!=null)(dvCyc[did]=dvCyc[did]||[]).push(cy);}
-        if(startT&&doneT>startT){let act=0;for(let i=0;i<tl.length;i++){const ss=tl[i].at,ee=(i+1<tl.length?tl[i+1].at:doneT);const s=Math.max(ss,startT),e=Math.min(ee,doneT);if(e>s&&isWork(tl[i].st))act+=(e-s);}totActive+=act;totCycle+=(doneT-startT);if(did){dvActMs[did]=(dvActMs[did]||0)+act;dvCycMs[did]=(dvCycMs[did]||0)+(doneT-startT);}}}
+      if(curCat==='done'&&doneT){doneTimes.push(doneT);const cy=(startT&&doneT>startT)?(doneT-startT)/DAY:null;if(cy!=null){cycles.push(cy);doneRec.push({t:doneT,cy:cy});}if(did){(dvDone[did]=dvDone[did]||[]).push(doneT);if(cy!=null)(dvCyc[did]=dvCyc[did]||[]).push(cy);}
+        if(startT&&doneT>startT){let act=0;for(let i=0;i<tl.length;i++){const ss=tl[i].at,ee=(i+1<tl.length?tl[i+1].at:doneT);const s=Math.max(ss,startT),e=Math.min(ee,doneT);if(e>s&&isWork(tl[i].st))act+=(e-s);}totActive+=act;totCycle+=(doneT-startT);flowRec.push({t:doneT,a:act,c:doneT-startT});if(did){dvActMs[did]=(dvActMs[did]||0)+act;dvCycMs[did]=(dvCycMs[did]||0)+(doneT-startT);}}}
       else if(startT&&(curCat==='active'||curCat==='qa'||curCat==='blocked')){const ag=(now-startT)/DAY;aging.push(ag);if(did)(dvAge[did]=dvAge[did]||[]).push(ag);}
     });
     const pct=(arr,p)=>{if(!arr.length)return null;const s=[...arr].sort((a,b)=>a-b);return s[Math.min(s.length-1,Math.floor(p/100*s.length))];};
     const wkMs=7*DAY;const nowD=new Date();nowD.setHours(0,0,0,0);const dow=(nowD.getDay()+6)%7;const curMon=nowD.getTime()-dow*DAY;
     const NW=8;const thru=[];for(let w=NW-1;w>=0;w--){const s=curMon-w*wkMs,e=s+wkMs;thru.push(doneTimes.filter(t=>t>=s&&t<e).length);}
     const thruAvg=thru.length?Math.round(thru.reduce((a,b)=>a+b,0)/thru.length*10)/10:0;
+    const cycW=[],flowW=[],qaW=[];for(let w=NW-1;w>=0;w--){const s=curMon-w*wkMs,e=s+wkMs;const cs=doneRec.filter(x=>x.t>=s&&x.t<e).map(x=>x.cy);cycW.push(cs.length?Math.round(pct(cs,50)*10)/10:null);const fr=flowRec.filter(x=>x.t>=s&&x.t<e);const fc=fr.reduce((a,x)=>a+x.c,0);flowW.push(fc>0?Math.round(fr.reduce((a,x)=>a+x.a,0)/fc*100):null);const P=Math.min(e,now)-1;qaW.push(qaSp.filter(sp=>sp.some(r=>r[0]<=P&&P<r[1])).length);}
     const byDev={};
     Object.keys(dvDone).concat(Object.keys(dvAge)).filter((v,i,a)=>a.indexOf(v)===i).forEach(did=>{
       const dts=dvDone[did]||[];const dthru=[];for(let w=NW-1;w>=0;w--){const s=curMon-w*wkMs,e=s+wkMs;dthru.push(dts.filter(t=>t>=s&&t<e).length);}
@@ -3474,9 +3552,9 @@ async function syncKanbanMetrics(silent){
     const predict=cv==null?'—':(cv<0.5?'Stable':cv<0.9?'Variable':'Erratic');
     const blockerRate=analyzedCount?Math.round(blockedCount/analyzedCount*100):0;
     const medBlocked=blockedDurs.length?(function(){const s=[...blockedDurs].sort((a,b)=>a-b);return s[Math.floor(s.length/2)];})():null;
-    const km={cycleP50:pct(cycles,50),cycleP85:pct(cycles,85),cycleP95:pct(cycles,95),cycleN:cycles.length,thru:thru,thruAvg:thruAvg,agingP85:pct(aging,85),wipN:aging.length,startState:CYCLE_START,byDev:byDev,flowEff:flowEff,predict:predict,cv:cv==null?null:Math.round(cv*100)/100,blockerRate:blockerRate,medBlocked:medBlocked,blockedN:blockedCount,asOf:new Date().toISOString().slice(0,10)};
+    const km={cycleP50:pct(cycles,50),cycleP85:pct(cycles,85),cycleP95:pct(cycles,95),cycleN:cycles.length,thru:thru,cycW:cycW,flowW:flowW,qaW:qaW,thruAvg:thruAvg,agingP85:pct(aging,85),wipN:aging.length,startState:CYCLE_START,byDev:byDev,flowEff:flowEff,predict:predict,cv:cv==null?null:Math.round(cv*100)/100,blockerRate:blockerRate,medBlocked:medBlocked,blockedN:blockedCount,asOf:new Date().toISOString().slice(0,10)};
     window.kanbanMetrics=km;try{localStorage.setItem('plt_kanban',JSON.stringify(km));}catch(e){}
-    if(view==='overview')renderOverview();
+    if(view==='overview')renderOverview();if(view==='metrics')renderMetricsView();
     if(silent)return{cycleP85:km.cycleP85,thru:thruAvg,n:km.cycleN};
     showToast('Flow metrics updated — '+km.cycleN+' completed items analyzed','info');
   }catch(err){if(silent)throw err;showToast('Flow metrics failed: '+err.message.slice(0,60),'warn');}
