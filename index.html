@@ -107,9 +107,10 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t);height:1
 .port-card-parked:hover{opacity:1;}
 .pl-wrap{overflow-x:auto;padding:4px 18px 40px}.pl-inner{min-width:880px;max-width:1280px}
 .pl-gh{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--bdr);cursor:pointer;user-select:none}
-.pl-cols,.pl-row{display:grid;grid-template-columns:18px minmax(220px,1fr) 120px 120px 170px 110px 52px;gap:12px;align-items:center}
+.pl-cols,.pl-row{display:grid;grid-template-columns:18px minmax(220px,1fr) 100px 110px 190px 190px 100px 52px;gap:12px;align-items:center}
 .pl-cols{padding:8px 0 4px;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--t3)}
 .pl-row{padding:10px 8px;margin:0 -8px;border-radius:8px;cursor:pointer}.pl-row:hover{background:var(--s2)}
+.pl-lead:hover{background:var(--s2);border-radius:6px;outline:1px solid var(--bdr)}
 .pl-act{display:flex;gap:8px;justify-content:flex-end;font-size:13px;color:var(--t3);opacity:0;transition:opacity .12s}.pl-row:hover .pl-act{opacity:1}
 .pl-act span{cursor:pointer}.pl-act span:hover{color:var(--t)}
 .pl-flag{font-size:11px;font-weight:500;padding:2px 8px;border-radius:99px}
@@ -623,7 +624,7 @@ window.engTickets=(function(){try{const d=localStorage.getItem('plt_eng_tickets'
 
 // ---- Shared state: the plan (projects, people, assignments, leads, notes) lives on the server so everyone sees the same thing ----
 var _st={rev:+(localStorage.getItem('plt_state_rev')||0),timer:null,ok:null,busy:false,dirty:false};
-function stKeys(){return {sk:SK,leads:'plt_leads_v1',removed:'plt_removed_devs',parked:'plt_autoparked',repomap:'plt_repo_map',loadhist:'plt_load_hist'};}
+function stKeys(){return {sk:SK,leads:'plt_leads_v1',removed:'plt_removed_devs',parked:'plt_autoparked',repomap:'plt_repo_map',loadhist:'plt_load_hist',baseline:'plt_baseline'};}
 function stSnapshot(){var k=stKeys(),o={};Object.keys(k).forEach(function(n){o[n]=localStorage.getItem(k[n]);});return o;}
 function stNorm(snap){try{var o={};Object.keys(snap||{}).forEach(function(k){var v=snap[k];if(k==='sk'&&v){try{var j=JSON.parse(v);delete j.collapseState;if(j.assignments){Object.keys(j.assignments).forEach(function(k){j.assignments[k]=(j.assignments[k]||[]).filter(function(a){return a&&a.src!=='jira';});});}(j.projects||[]).forEach(function(p){['openN','sig','sigDone','ext','extDone'].forEach(function(x){delete p[x];});});(j.devs||[]).forEach(function(d){delete d.avatar;});v=JSON.stringify(j);}catch(e){}}o[k]=v;});return JSON.stringify(o);}catch(e){return String(Math.random());}}
 function stBanner(cur){if(document.getElementById('st-banner'))return;var b=document.createElement('div');b.id='st-banner';b.style.cssText='position:fixed;top:0;left:50%;transform:translateX(-50%);z-index:9999;background:var(--t,#1a1a1a);color:var(--bg,#fff);font-size:12px;padding:8px 14px;border-radius:0 0 10px 10px;display:flex;gap:12px;align-items:center;box-shadow:0 2px 10px rgba(0,0,0,.2)';b.innerHTML='<span>Someone updated the plan.</span><button style="background:transparent;border:1px solid currentColor;color:inherit;border-radius:6px;padding:2px 10px;cursor:pointer;font-size:12px">Refresh</button>';b.querySelector('button').onclick=function(){stAdopt(cur,'');};document.body.appendChild(b);}
@@ -848,6 +849,85 @@ let boardLayout='list';
 function setBoardLayout(l){boardLayout=l;try{localStorage.setItem('plt_board_layout',l);}catch(e){}renderBoard();}
 function projProg(pid){var m=window.__projProg;if(!m){try{m=window.__projProg=JSON.parse(localStorage.getItem('plt_proj_prog')||'{}');}catch(e){m={};}}return m[pid]||null;}
 function toggleListGroup(k){var m=window._plOpen=window._plOpen||{};m[k]=!(k in m?m[k]:window._plDef&&window._plDef[k]);renderBoard();}
+
+/* ===== Projects tab: manual lead picker, % done, PR activity ===== */
+function toggleProjLead(pid,id){var p=projects.find(function(x){return x.id===pid;});if(!p)return;p.leads=p.leads||[];var i=p.leads.indexOf(id);if(i<0)p.leads.push(id);else p.leads.splice(i,1);save();closeLeadPick();if(view==='board')renderBoard();if(selPid===pid)selProject(pid);if(view==='overview')renderOverview();}
+function closeLeadPick(){var m=document.getElementById('lead-pick');if(m)m.remove();document.removeEventListener('click',closeLeadPick);}
+function openLeadPick(pid,ev){
+  ev.stopPropagation();closeLeadPick();
+  var p=projects.find(function(x){return x.id===pid;});if(!p)return;
+  var cur=p.leads||[],esc=function(t){return String(t).replace(/</g,'&lt;');};
+  var rows=leadList().map(function(l){var on=cur.indexOf(l.id)>=0;return '<div onclick="event.stopPropagation();toggleProjLead(\''+pid+'\',\''+l.id+'\')" style="display:flex;align-items:center;gap:8px;padding:6px 10px;cursor:pointer;font-size:12px"><span style="width:14px;height:14px;border-radius:4px;border:1.5px solid '+(on?'var(--acc)':'var(--bdr2)')+';background:'+(on?'var(--acc)':'transparent')+';color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center">'+(on?'\u2713':'')+'</span>'+esc(l.name)+'</div>';}).join('');
+  var m=document.createElement('div');m.id='lead-pick';
+  m.style.cssText='position:fixed;z-index:200;background:var(--sur);border:1px solid var(--bdr);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.14);min-width:190px;padding:4px 0;max-height:300px;overflow:auto';
+  m.innerHTML='<div style="font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--t3);padding:6px 10px 4px">Project lead</div>'+(rows||'<div style="padding:6px 10px;font-size:11px;color:var(--t3)">No leads yet</div>')+'<div onclick="event.stopPropagation();closeLeadPick();addProjLead(\''+pid+'\',\'__new\')" style="padding:7px 10px;font-size:12px;color:var(--acc);cursor:pointer;border-top:1px solid var(--bdr);margin-top:4px">+ Add someone new\u2026</div>';
+  document.body.appendChild(m);
+  var r=ev.currentTarget.getBoundingClientRect();m.style.left=Math.min(r.left,window.innerWidth-210)+'px';m.style.top=Math.min(r.bottom+4,window.innerHeight-m.offsetHeight-8)+'px';
+  setTimeout(function(){document.addEventListener('click',closeLeadPick);},0);
+}
+function psScope(pid){try{var C=window.__psc||(window.__psc=JSON.parse(localStorage.getItem('plt_proj_scope')||'null'));return C&&C.m?C.m[pid]||null:null;}catch(e){return null;}}
+function psBase(pid){try{var B=JSON.parse(localStorage.getItem('plt_baseline')||'{}')||{};return B[pid]||null;}catch(e){return null;}}
+async function syncProjScope(force){
+  if(!jiraReady()||window.__scopeBusy)return;
+  var C=null;try{C=JSON.parse(localStorage.getItem('plt_proj_scope')||'null');}catch(e){}
+  if(!force&&C&&Date.now()-C.ts<6*36e5)return;
+  window.__scopeBusy=1;
+  try{
+    var spF=localStorage.getItem('plt_jira_sp_field')||'customfield_10010',headers=jiraHeaders();
+    var live=projects.filter(function(q){return q.jiraKey&&!q.archived&&q.status!=='done';}),byKey={};
+    live.forEach(function(q){byKey[String(q.jiraKey).toUpperCase()]=q;});
+    var keys=Object.keys(byKey);if(!keys.length)return;
+    var avg=rwAvgPts(),cfg=rwCfg(),m={},now=Date.now(),cut=now-14*864e5;
+    for(var i=0;i<keys.length;i+=40){
+      var ks=keys.slice(i,i+40).join(','),tok=null;
+      for(var pg=0;pg<12;pg++){
+        var u=JIRA+'/rest/api/3/search/jql?jql='+encodeURIComponent('parent in ('+ks+') AND issuetype not in subTaskIssueTypes()')+'&fields=status,issuetype,resolutiondate,parent,'+spF+'&maxResults=100'+(tok?'&nextPageToken='+encodeURIComponent(tok):'');
+        var r=await jFetch(u,{headers:headers});if(!r.ok)break;
+        var d=await r.json();
+        (d.issues||[]).forEach(function(is){
+          var f=is.fields||{},pk=f.parent&&f.parent.key&&String(f.parent.key).toUpperCase(),pj=pk&&byKey[pk];if(!pj)return;
+          var it=(f.issuetype&&f.issuetype.name)||'';if(/epic/i.test(it))return;
+          var pts=f[spF],ty=rwType({it:it}),w=(pts!=null&&pts>0)?pts:(ty?cfg[ty]:avg);
+          var o=m[pj.id]=m[pj.id]||{n:0,dn:0,tot:0,dw:0,d14:0,d14w:0};
+          o.n++;o.tot+=w;
+          if(f.status&&f.status.statusCategory&&f.status.statusCategory.key==='done'){o.dn++;o.dw+=w;var rd=f.resolutiondate?Date.parse(f.resolutiondate):0;if(rd>=cut){o.d14++;o.d14w+=w;}}
+        });
+        if(d.isLast||!d.nextPageToken||!(d.issues||[]).length)break;tok=d.nextPageToken;
+      }
+    }
+    Object.keys(m).forEach(function(k){var o=m[k];o.tot=Math.round(o.tot*10)/10;o.dw=Math.round(o.dw*10)/10;o.d14w=Math.round(o.d14w*10)/10;});
+    localStorage.setItem('plt_proj_scope',JSON.stringify({ts:now,m:m}));window.__psc=null;
+    // baseline: first time we see a project's scope
+    var B={};try{B=JSON.parse(localStorage.getItem('plt_baseline')||'{}')||{};}catch(e){}
+    var ch=false,today=new Date().toISOString().slice(0,10);
+    Object.keys(m).forEach(function(k){if(!B[k]&&m[k].tot>0){B[k]={d:today,w:m[k].tot};ch=true;}});
+    if(ch){localStorage.setItem('plt_baseline',JSON.stringify(B));try{stPush();}catch(e){}}
+    if(view==='board')renderBoard();
+  }catch(e){console.warn('Project scope sync failed',e);}
+  finally{window.__scopeBusy=0;}
+}
+function resetBaseline(pid){var B={};try{B=JSON.parse(localStorage.getItem('plt_baseline')||'{}')||{};}catch(e){}var o=psScope(pid);if(!o)return;B[pid]={d:new Date().toISOString().slice(0,10),w:o.tot};localStorage.setItem('plt_baseline',JSON.stringify(B));try{stPush();}catch(e){}if(view==='board')renderBoard();}
+function prByProject(){
+  var c=window.__prp;if(c&&Date.now()-c.t<20000)return c.v;
+  var out={};
+  try{
+    var KE={};try{KE=JSON.parse(localStorage.getItem('plt_key_epic')||'{}')||{};}catch(e){}
+    var byKey={};projects.forEach(function(q){if(q.jiraKey)byKey[String(q.jiraKey).toUpperCase()]=q;});
+    var rm=repoMapParse(),repoIds={};Object.keys(rm).forEach(function(r){repoIds[r]=rm[r].map(function(v){var pj=byKey[v.toUpperCase()]||projects.find(function(q){return !q.archived&&String(q.name).toLowerCase()===v.toLowerCase();});return pj&&pj.id;}).filter(Boolean);});
+    var cut=new Date(Date.now()-14*864e5).toISOString().slice(0,10),old=new Date(Date.now()-7*864e5).toISOString().slice(0,10);
+    Object.keys(window.ghData||ghData||{}).forEach(function(did){
+      var g=(window.ghData||ghData)[did];if(!g||!g.prAll)return;
+      g.prAll.forEach(function(pr){
+        var ids=[],seen={};(String(pr.t||'').match(/[A-Z][A-Z0-9]+-\d+/g)||[]).forEach(function(k){if(seen[k])return;seen[k]=1;var ek=byKey[k]?k:KE[k],pj=ek&&byKey[ek];if(pj&&ids.indexOf(pj.id)<0)ids.push(pj.id);});
+        if(!ids.length&&pr.r){var rr=repoIds[String(pr.r).toLowerCase()];if(rr&&rr.length)ids=rr.slice();}
+        ids.forEach(function(pid){var o=out[pid]=out[pid]||{merged:0,open:0,stale:0};
+          if(pr.m&&pr.d&&pr.d>=cut)o.merged++;
+          else if(pr.o){o.open++;if(pr.d&&pr.d<old)o.stale++;}});
+      });
+    });
+  }catch(e){}
+  window.__prp={t:Date.now(),v:out};return out;
+}
 function plInfo(p){
   var today=new Date().toISOString().slice(0,10),done=p.status==='done',od=!done&&p.deadline&&p.deadline<today;
   var mems=assignments[p.id]||[],needs=!done&&!mems.length&&!(p.sig&&p.sig.length)&&p.status!=='planned';
@@ -862,18 +942,26 @@ function plRow(p){
   var avs=_M.slice(0,4).map(function(a,i){var d=devs.find(function(x){return x.id===a.devId;});if(!d)return '';var c=gc(d.colorIdx);return '<span class="pc-av'+(a.src==='plan'?' plan-av':'')+'" style="'+(d.avatar?'':'background:'+c.bg+';color:'+c.t)+';margin-left:'+(i?-6:0)+'px" title="'+esc(d.name)+(a.src==='jira'?' · has tickets on this in Jira':' · '+a.pct+'%')+'">'+(d.avatar?'<img src="'+d.avatar+'" alt="">':ini(d.name))+'</span>';}).join('')+(_M.length>4?'<span class="pc-av pc-av-more" style="margin-left:-6px">+'+(_M.length-4)+'</span>':'');
   var _ext='';
   var people=((avs||'')+(_ext||''))||(I.needs?'<span class="pl-flag" style="background:#fef3c7;color:#92400e">Needs people</span>':'<span style="font-size:11px;color:var(--t3)">—</span>');
-  var L=projLeads(p),lead=L.length?'<span style="color:var(--t)">◆ '+L.map(function(l){return esc(l.name);}).join(', ')+'</span>':'<span style="color:var(--t3)">—</span>';
-  var pr=projProg(p.id),prog='<div style="font-size:11px;color:var(--t3)">—</div>';
-  if(I.done)prog='<div style="font-size:11px;color:var(--t3)">Completed</div>';
-  else if(!pr&&p.openN>0)prog='<div style="font-size:12px;color:var(--t)">'+p.openN+' open</div>';
-  else if(pr){var _o=pr.ip+pr.bl+pr.td;if(_o>0)prog='<div style="font-size:12px;color:var(--t)">'+_o+' open</div><div style="font-size:11px;color:var(--t3);margin-top:2px">'+(pr.ip+pr.bl)+' active'+(pr.bl?' · <span style=\"color:var(--red)\">'+pr.bl+' blocked</span>':'')+'</div>';}
+  var L=projLeads(p),lead=L.length?'<span style="color:var(--t)">◆ '+L.map(function(l){return esc(l.name);}).join(', ')+'</span>':(I.done?'<span style="color:var(--t3)">—</span>':'<span style="font-size:11px;color:var(--t3);border:1px dashed var(--bdr2);padding:1px 9px;border-radius:99px">+ Lead</span>');
+  var SC=psScope(p.id),BS=psBase(p.id),prog='<div style="font-size:11px;color:var(--t3)">—</div>',l2w='<div style="font-size:11px;color:var(--t3)">—</div>';
+  if(I.done){prog='<div style="font-size:11px;color:var(--t3)">Completed</div>';}
+  else if(SC&&SC.tot>0){var pc=Math.round(SC.dw/SC.tot*100),gr=BS&&BS.w>0?Math.round((SC.tot-BS.w)/BS.w*100):0;
+    prog='<div style="display:flex;align-items:baseline;gap:6px"><span style="font-size:13px;font-weight:600">'+pc+'%</span>'+(gr>=5?'<span style="font-size:11px;color:'+(gr>=15?'#b45309':'var(--t3)')+'" title="Total scope grew '+gr+'% since '+(BS?BS.d:'')+' ('+BS.w+' \u2192 '+SC.tot+' pts)">scope +'+gr+'%</span>':'')+'</div><div style="height:5px;background:var(--s2);border-radius:99px;overflow:hidden;margin-top:5px;max-width:150px"><i style="display:block;height:100%;width:'+Math.min(100,pc)+'%;background:var(--grn)"></i></div>';}
+  var _pp=prByProject()[p.id]||{merged:0,open:0,stale:0},_pr=projProg(p.id)||{bl:0};
+  if(!I.done){var d14=SC?SC.d14:null,bits=[];
+    if(_pp.merged)bits.push(_pp.merged+' PR'+(_pp.merged>1?'s':'')+' merged');
+    if(_pp.open)bits.push('<span style="color:'+(_pp.stale?'#b45309':'var(--t3)')+'">'+_pp.open+' open'+(_pp.stale?' ('+_pp.stale+' >7d)':'')+'</span>');
+    if(_pr.bl)bits.push('<span style="color:var(--red)">'+_pr.bl+' blocked</span>');
+    if(d14!=null)l2w='<div style="font-size:12px;'+(d14===0&&!_pp.merged?'color:var(--t3)':'')+'">'+(d14===0&&!_pp.merged?'Quiet':'<b style="font-weight:500">'+d14+' done</b>')+'</div>'+(bits.length?'<div style="font-size:11px;color:var(--t3);margin-top:2px">'+bits.join(' \u00b7 ')+'</div>':'');
+    else if(bits.length)l2w='<div style="font-size:11px;color:var(--t3)">'+bits.join(' \u00b7 ')+'</div>';}
+  p._quiet=!I.done&&I.needs&&!I.od&&p.status!=='blocked'&&p.status!=='at-risk'&&!(SC&&SC.d14)&&!_pp.merged&&!_pp.open;
   var due='<div style="font-size:12px;color:var(--t3)">'+(p.quarter||'—')+'</div>';
   if(I.done){var pd=projDone(p);due='<div style="font-size:12px;color:var(--t2)">✓ '+(pd?(pd.approx?'~':'')+pd.date.slice(5):'')+'</div>';}
-  else if(p.deadline&&p.deadline!=='TBD'){var dd=new Date(p.deadline+'T00:00:00');due='<div style="font-size:12px;font-weight:500;color:'+(I.od?'var(--red)':'var(--t)')+'">'+dd.toLocaleDateString('en-US',{month:'short',day:'numeric'})+'</div>'+(I.od?'<div style="font-size:11px;color:var(--t3);margin-top:2px">'+I.days+' days late</div>':'');}
+  else if(p.deadline&&p.deadline!=='TBD'){var dd=new Date(p.deadline+'T00:00:00');due='<div style="font-size:12px;font-weight:500;color:'+(I.od?'var(--red)':'var(--t)')+'">'+dd.toLocaleDateString('en-US',{month:'short',day:'numeric'})+'</div>'+(I.od?'<div style="font-size:11px;color:var(--t3);margin-top:2px">'+I.days+'d late</div>':'');}
   var act=I.done?'':'<span title="'+(p.pinned?'Remove from Overview':'Highlight on Overview')+'" onclick="event.stopPropagation();togglePin(\''+p.id+'\')" style="'+(p.pinned?'color:var(--acc)':'')+'">'+(p.pinned?'★':'☆')+'</span><span title="Park" onclick="parkProject(\''+p.id+'\',event)">✕</span>';
-  return '<div class="pl-row" onclick="selProject(\''+p.id+'\')"'+(selPid===p.id?' style="background:var(--s2)"':(I.rank<=1?' style="background:rgba(220,38,38,.04)"':''))+'><span style="width:9px;height:9px;border-radius:99px;background:'+stCol+';justify-self:center"></span>'+
+  return '<div class="pl-row" onclick="selProject(\''+p.id+'\')"'+(selPid===p.id?' style="background:var(--s2)"':'')+'><span style="width:9px;height:9px;border-radius:99px;background:'+stCol+';justify-self:center"></span>'+
     '<div style="min-width:0"><div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(p.name)+'</div><div style="font-size:11px;color:var(--t3);margin-top:2px">'+(p.jiraKey?'<span style="font-family:var(--mono)">'+p.jiraKey+'</span>':'')+(state?'<span style="color:'+stCol+';font-weight:500">'+(p.jiraKey?' · ':'')+state+'</span>':'')+(vendBadge(p)?' '+vendBadge(p):'')+'</div>'+((p.sn&&p.sn.t)?'<div style="font-size:11px;color:var(--t2);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+esc(p.sn.t).replace(/"/g,'&quot;')+'">'+esc(p.sn.t)+' <span style="color:'+(snStale(p)?'var(--amb)':'var(--t3)')+'">· '+snAgo(p)+'</span></div>':(snStale(p)?'<div style="font-size:11px;color:var(--amb);margin-top:3px">No status update</div>':''))+((p.sn&&p.sn.ask)?'<div style="font-size:11px;color:#b45309;margin-top:2px">▶ '+esc(p.sn.ask)+'</div>':'')+'</div>'+
-    '<div style="font-size:12px">'+lead+'</div><div style="display:flex;align-items:center">'+people+'</div><div>'+prog+'</div><div>'+due+'</div><div class="pl-act">'+act+'</div></div>';
+    '<div style="font-size:12px"'+(I.done?'':' onclick="openLeadPick(\''+p.id+'\',event)" title="Click to set the lead" class="pl-lead"')+'>'+lead+'</div><div style="display:flex;align-items:center">'+people+'</div><div>'+prog+'</div><div>'+l2w+'</div><div>'+due+'</div><div class="pl-act">'+act+'</div></div>';
 }
 function renderProjectList(groups,doneAll,q,qCaption){
   var _lo=(boardGroup==='workstream'&&activeQ==='all');var all=groups.filter(function(g){return g.items.length||(_lo&&looseFor(g.title).length);}).map(function(g){
@@ -890,11 +978,11 @@ function renderProjectList(groups,doneAll,q,qCaption){
     if(!flags.length&&boardGroup==='workstream'&&activeQ==='all')flags.push(['rgba(22,163,74,.12)','var(--grn)','all on track']);
     var items=g.items.slice().sort(function(a,b){return (a._pl.rank-b._pl.rank)||(urgScore(a)-urgScore(b));});
     return '<div style="margin-bottom:22px"><div class="pl-gh" onclick="toggleListGroup(\''+esc(key)+'\')"><span style="font-size:11px;color:var(--t3);width:12px">'+(open?'▾':'▸')+'</span><span style="width:8px;height:8px;border-radius:99px;background:'+g.color+'"></span><span style="font-size:14px;font-weight:600">'+g.title+'</span><span style="font-size:12px;color:var(--t3)">'+g.items.length+' project'+(g.items.length===1?'':'s')+'</span>'+flags.map(function(f){return '<span class="pl-flag" style="background:'+f[0]+';color:'+f[1]+'">'+f[2]+'</span>';}).join('')+'</div>'+
-      (open?'<div class="pl-cols"><span></span><span>Project</span><span>Lead</span><span>People</span><span>Open work</span><span>'+(activeQ!=='all'?'Completed':'Due')+'</span><span></span></div>'+items.map(plRow).join(''):'')+(open&&_lo?looseSection(g.title,q):'')+'</div>';
+      (open?'<div class="pl-cols"><span></span><span>Project</span><span>Lead</span><span>People</span><span>Done</span><span>Last 2 weeks</span><span>'+(activeQ!=='all'?'Completed':'Due')+'</span><span></span></div>'+(function(){var rows=items.map(function(p){return {p:p,h:plRow(p)};});var act=rows.filter(function(r){return !r.p._quiet;}),qt=rows.filter(function(r){return r.p._quiet;});var qk='q:'+g.title,qo=!!(window._plOpen&&window._plOpen[qk])||!!q;return act.map(function(r){return r.h;}).join('')+(qt.length?'<div onclick="toggleListGroup(\''+esc(qk)+'\')" style="display:flex;gap:8px;align-items:center;padding:9px 0;font-size:12px;color:var(--t3);cursor:pointer;border-top:1px solid var(--bdr)"><span style="width:12px;font-size:11px">'+(qo?'▾':'▸')+'</span>'+qt.length+' project'+(qt.length===1?'':'s')+' with no people and no recent progress</div>'+(qo?qt.map(function(r){return r.h;}).join(''):''):'');})():'')+(open&&_lo?looseSection(g.title,q):'')+'</div>';
   }).join('');
   var summary=activeQ!=='all'?qCaption:'<div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;padding:14px 0 6px"><span style="font-size:13px;color:var(--t2)">'+tot+' active project'+(tot===1?'':'s')+'</span>'+(odT?'<span style="font-size:12px;color:var(--red);font-weight:500">'+odT+' overdue</span>':'')+(ndT?'<span style="font-size:12px;color:#b45309;font-weight:500">'+ndT+' need people</span>':'')+'<span style="font-size:12px;color:var(--t3)">Sorted by what needs you first</span></div>';
   var doneBlk='';
-  if(doneAll.length){var dopen=!!window._showDone||!!q;doneBlk='<div class="pl-gh" onclick="toggleDoneSection()" style="border-bottom:none;border-top:1px solid var(--bdr);margin-top:6px;padding:12px 0"><span style="font-size:11px;color:var(--t3);width:12px">'+(dopen?'▾':'▸')+'</span><span style="font-size:13px;font-weight:500;color:var(--t2)">Completed</span><span style="font-size:12px;color:var(--t3)">'+doneAll.length+'</span></div>'+(dopen?'<div class="pl-cols"><span></span><span>Project</span><span>Lead</span><span>People</span><span>Open work</span><span>Completed</span><span></span></div>'+doneAll.slice().sort(function(a,b){return ((b.deadline||'')<(a.deadline||'')?-1:1);}).map(plRow).join(''):'');}
+  if(doneAll.length){var dopen=!!window._showDone||!!q;doneBlk='<div class="pl-gh" onclick="toggleDoneSection()" style="border-bottom:none;border-top:1px solid var(--bdr);margin-top:6px;padding:12px 0"><span style="font-size:11px;color:var(--t3);width:12px">'+(dopen?'▾':'▸')+'</span><span style="font-size:13px;font-weight:500;color:var(--t2)">Completed</span><span style="font-size:12px;color:var(--t3)">'+doneAll.length+'</span></div>'+(dopen?'<div class="pl-cols"><span></span><span>Project</span><span>Lead</span><span>People</span><span>Done</span><span>Last 2 weeks</span><span>Completed</span><span></span></div>'+doneAll.slice().sort(function(a,b){return ((b.deadline||'')<(a.deadline||'')?-1:1);}).map(plRow).join(''):'');}
   var parked=projects.filter(function(p){return p.archived;}),parkBlk='';
   if(parked.length){var po=!!window._showParked;parkBlk='<div class="pl-gh" onclick="toggleParkedSection()" style="border-bottom:none"><span style="font-size:11px;color:var(--t3);width:12px">'+(po?'▾':'▸')+'</span><span style="font-size:13px;font-weight:500;color:var(--t3)">Parked</span><span style="font-size:12px;color:var(--t3)">'+parked.length+'</span></div>'+(po?parked.map(function(p){return '<div style="display:flex;align-items:center;gap:10px;padding:6px 0 6px 22px;font-size:12px;color:var(--t2)"><span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+String(p.name).replace(/</g,'&lt;')+'</span><span style="color:var(--acc);cursor:pointer" onclick="unparkProject(\''+p.id+'\',event)">Restore</span></div>';}).join(''):'');}
   return '<div class="pl-wrap"><div class="pl-inner">'+summary+(body||(doneAll.length?'':'<div style="padding:40px;text-align:center;color:var(--t3);font-size:12px">No active projects match the current filters.</div>'))+doneBlk+parkBlk+'</div></div>';
@@ -3107,7 +3195,7 @@ async function syncGithub(silent){
     // build ghData from grouped PRs
     const since30date=new Date(since30+'T00:00:00Z');
     ghData={};
-    Object.keys(authorToDev).forEach(login=>{const devId=authorToDev[login];const prs=byAuthor[login]||[];const openPRs=prs.filter(pr=>pr.state==='open');const merged=prs.filter(pr=>pr.pull_request&&pr.pull_request.merged_at).length;const prs30=prs.filter(pr=>new Date(pr.created_at)>since30date).length;const cycles=prs.filter(pr=>pr.pull_request&&pr.pull_request.merged_at).map(pr=>Math.round((new Date(pr.pull_request.merged_at)-new Date(pr.created_at))/864e5)).filter(d=>d>=0&&d<180);const avgCycle=cycles.length?Math.round(cycles.reduce((a,b)=>a+b,0)/cycles.length):null;const repos=new Set();prs.forEach(pr=>{const rp=pr.repository_url&&pr.repository_url.match(/\/([^\/]+)$/);if(rp)repos.add(rp[1]);});ghData[devId]={prs:prs30,merged:merged,openPRs:openPRs.length,avgCycleDays:avgCycle,repos:Array.from(repos).slice(0,5),login:login,lastSync:new Date().toISOString(),prAll:prs.filter(pr=>new Date(pr.created_at)>since30date).map(pr=>({t:String(pr.title||'').slice(0,160),o:pr.state==='open',m:!!(pr.pull_request&&pr.pull_request.merged_at),r:(pr.repository_url&&pr.repository_url.match(/\/([^\/]+)$/)||[])[1]||''})),prList:prs.slice(0,15).map(pr=>({title:pr.title,url:pr.html_url,state:pr.state,merged:!!(pr.pull_request&&pr.pull_request.merged_at),repo:pr.repository_url&&pr.repository_url.match(/\/([^\/]+)$/)?pr.repository_url.match(/\/([^\/]+)$/)[1]:'',daysOpen:Math.round((Date.now()-new Date(pr.created_at))/864e5)})),cycleTimes:prs.filter(pr=>pr.pull_request&&pr.pull_request.merged_at).map(pr=>Math.round((new Date(pr.pull_request.merged_at)-new Date(pr.created_at))/864e5)).filter(d=>d>=0&&d<180),openAges:prs.filter(pr=>pr.state==='open').map(pr=>Math.round((Date.now()-new Date(pr.created_at))/864e5))};});
+    Object.keys(authorToDev).forEach(login=>{const devId=authorToDev[login];const prs=byAuthor[login]||[];const openPRs=prs.filter(pr=>pr.state==='open');const merged=prs.filter(pr=>pr.pull_request&&pr.pull_request.merged_at).length;const prs30=prs.filter(pr=>new Date(pr.created_at)>since30date).length;const cycles=prs.filter(pr=>pr.pull_request&&pr.pull_request.merged_at).map(pr=>Math.round((new Date(pr.pull_request.merged_at)-new Date(pr.created_at))/864e5)).filter(d=>d>=0&&d<180);const avgCycle=cycles.length?Math.round(cycles.reduce((a,b)=>a+b,0)/cycles.length):null;const repos=new Set();prs.forEach(pr=>{const rp=pr.repository_url&&pr.repository_url.match(/\/([^\/]+)$/);if(rp)repos.add(rp[1]);});ghData[devId]={prs:prs30,merged:merged,openPRs:openPRs.length,avgCycleDays:avgCycle,repos:Array.from(repos).slice(0,5),login:login,lastSync:new Date().toISOString(),prAll:prs.filter(pr=>new Date(pr.created_at)>since30date).map(pr=>({d:String((pr.pull_request&&pr.pull_request.merged_at)||pr.created_at||'').slice(0,10),t:String(pr.title||'').slice(0,160),o:pr.state==='open',m:!!(pr.pull_request&&pr.pull_request.merged_at),r:(pr.repository_url&&pr.repository_url.match(/\/([^\/]+)$/)||[])[1]||''})),prList:prs.slice(0,15).map(pr=>({title:pr.title,url:pr.html_url,state:pr.state,merged:!!(pr.pull_request&&pr.pull_request.merged_at),repo:pr.repository_url&&pr.repository_url.match(/\/([^\/]+)$/)?pr.repository_url.match(/\/([^\/]+)$/)[1]:'',daysOpen:Math.round((Date.now()-new Date(pr.created_at))/864e5)})),cycleTimes:prs.filter(pr=>pr.pull_request&&pr.pull_request.merged_at).map(pr=>Math.round((new Date(pr.pull_request.merged_at)-new Date(pr.created_at))/864e5)).filter(d=>d>=0&&d<180),openAges:prs.filter(pr=>pr.state==='open').map(pr=>Math.round((Date.now()-new Date(pr.created_at))/864e5))};});
     localStorage.setItem('plt_gh_data',JSON.stringify(ghData));
     // report: real active handles that didn't match a dev (with PR counts) → the pool to map from
     const activeUnmatched=Object.keys(byAuthor).filter(l=>!authorToDev[l]).map(l=>({login:l,count:byAuthor[l].length})).sort((a,b)=>b.count-a.count);
@@ -3144,6 +3232,7 @@ async function autoSyncJira(){
     await syncJiraTickets(true);
     await syncJiraDates(true);
     await autoAssignFromJira(true);
+    try{await syncProjScope(false);}catch(e){}
     render();
     await fetchServerMetrics();
     try{var _vd=vendData();if(!window._vendLoading&&(!_vd||Date.now()-_vd.at>6*36e5))vendorRefresh();}catch(e){}
@@ -3211,7 +3300,7 @@ async function discoverEpicsFromJira(projByKey,headers,dry){
     var dd='';var raw=ddField?ef[ddField]:null;if(raw&&typeof raw==='string')dd=raw.slice(0,10);if(!dd&&ef.duedate)dd=ef.duedate;
     var st=mapJiraStatus(sName);
     var staleHold=st==='blocked'&&ef.updated&&Date.parse(ef.updated)<stale;
-    out.push({id:'p_jira_'+K.replace(/[^A-Z0-9]/g,''),name:String(ef.summary||K).trim(),workstream:ws,priority:pri,status:st,jiraKey:K,deadline:dd,quarter:'',size:'M',archived:!!staleHold,autoAdded:true,leads:_leadIds(ef),created:nowIso,dateFromJira:!!dd,statusFromJira:true});
+    out.push({id:'p_jira_'+K.replace(/[^A-Z0-9]/g,''),name:String(ef.summary||K).trim(),workstream:ws,priority:pri,status:st,jiraKey:K,deadline:dd,quarter:'',size:'M',archived:!!staleHold,autoAdded:true,leads:[],created:nowIso,dateFromJira:!!dd,statusFromJira:true});
   });
   if(!dry)out.forEach(function(np){projects.push(np);assignments[np.id]=[];if(!np.archived&&projByKey)projByKey[np.jiraKey]=np;});
   return out;
